@@ -55,42 +55,44 @@ function tuck(start, direction, bed){
     var y = start[1];
     var z = start[2];
 
-    x+=2*dx;
-    z-=dz;
-    buffer+= format(x, y, z);
+    x += 2*dx;
+    z -= dz;
+    buffer += format( x, y, z);
 
-    x-=dx;
-    y+=dy;
-    z+=2*dz;
-    buffer+= format(x, y, z);
+    y += dy;
+    z += 2*dz;
+    buffer += format( x, y ,z);
 
-    y+=dy;
-    buffer+= format(x, y, z);
+    x -= dx;
+    buffer += format( x, y, z);
 
-    x+=dx;
-    y+=dy;
-    z-=2*dz;
-    buffer+= format(x, y, z);
+    y += dy;
+    buffer += format( x, y, z);
 
-    x+=dx;
-    buffer+= format(x, y, z);
+    x += dx;
+    z -= 2*dz;
+    buffer += format( x, y, z);
 
-    x+=dx;
-    y-=dy;
-    z+=2*dz;
-    buffer+= format(x, y, z);
+    x += dx;
+    buffer += format( x, y, z);
 
-    y-=dy;
-    buffer+= format(x, y, z);
+    x += dx;
+    z += 2*dz;
+    buffer += format( x, y, z);
 
-    x-=dx;
-    y-=dy;
-    z-=2*dz;
-    buffer+= format(x, y, z);
+    y -= dy;
+    buffer += format( x, y, z);
 
-    x+=2*dx;
-    z+=dz;
-    buffer+= format(x, y, z);
+    x -= dx;
+    buffer += format( x, y, z);
+
+    y -= dy;
+    z -= 2*dz;
+    buffer += format( x, y, z);
+
+    x += 2*dx;
+    z += dz;
+    buffer += format( x, y, z);
 
     stream.write(buffer);
     return [x, y, z];
