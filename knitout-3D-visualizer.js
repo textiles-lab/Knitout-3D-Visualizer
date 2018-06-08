@@ -24,7 +24,7 @@ var stream = fs.createWriteStream(textFile);
 var boxWidth = 1;
 var boxHeight = 1;
 var boxDepth = 0.1;
-var boxSpacing = boxHeight/3;
+var boxSpacing = boxHeight/2;
 
 //helper functions
 function format(x, y, z){
@@ -46,7 +46,7 @@ function errorHandler(err, data){
 function tuck(start, direction, bed){
     var buffer = '';
     var dx  = boxWidth/6;
-    var dy =  boxHeight/2;
+    var dy =  boxHeight/3;
     var dz = boxDepth/2;
     if(direction == '-') dx*= -1;
     if(bed=='b') dz*=-1;
@@ -64,6 +64,9 @@ function tuck(start, direction, bed){
     z+=2*dz;
     buffer+= format(x, y, z);
 
+    y+=dy;
+    buffer+= format(x, y, z);
+
     x+=dx;
     y+=dy;
     z-=2*dz;
@@ -75,6 +78,9 @@ function tuck(start, direction, bed){
     x+=dx;
     y-=dy;
     z+=2*dz;
+    buffer+= format(x, y, z);
+
+    y-=dy;
     buffer+= format(x, y, z);
 
     x-=dx;
