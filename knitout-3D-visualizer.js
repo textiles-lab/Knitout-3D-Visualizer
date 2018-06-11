@@ -20,11 +20,14 @@ let knitoutfile = process.argv[2];
 let textFile = process.argv[3];
 const fs = require('fs');
 var stream = fs.createWriteStream(textFile);
+var activeRow = [];
 
 var boxWidth = 1;
 var boxHeight = 1;
 var boxDepth = 0.1;
 var boxSpacing = boxHeight/2;
+var bedDistance = 0.25;
+
 
 //helper functions
 function format(x, y, z){
@@ -40,7 +43,6 @@ function errorHandler(err, data){
  *  -start: array of components of the start position
  *  -direction: direction of the current pass,
  *  -bed: the needle bed
- * each should include the "end" of the yarn in the box but not the "start"
  */
 
 function tuck(start, direction, bed){
@@ -49,11 +51,19 @@ function tuck(start, direction, bed){
     var dy =  boxHeight/3;
     var dz = boxDepth/2;
     if(direction == '-') dx*= -1;
-    if(bed=='b') dz*=-1;
+    if(bed=='b'){
+        dz*=-1;
+        start[2] = -bedDistance;
+    }else{
+        start[2] = 0;
+    }
 
     var x = start[0];
     var y = start[1];
     var z = start[2];
+
+    x += dx;
+    buffer += format( x, y, z);
 
     x += 2*dx;
     z -= dz;
@@ -102,6 +112,17 @@ function knit(start, direction, bed){
     return tuck(start, direction, bed);
 }
 
+function xfer(fromSide, fromNeedle, toSide, toNeedle){
+
+}
+
+function newRow(start, currDir){
+    start[1]+=boxSpacing;
+    if(currDir == '-') start[0] -= boxWidth/6;
+    else start[0] += boxWidth/6;
+    return start;
+}
+
 //just for testing
 function tests(){
     var start = [0,0,0];
@@ -109,14 +130,21 @@ function tests(){
     var direction = '-';
 
     stream.write(format(start[0], start[1], start[2]));
-    //for(var col = 0; col<10; col++){
+    for(var col = 0; col<10; col++){
+        if(col%2==0)
+            bed = 'f';
+        else
+            bed = 'b';
         start = tuck(start, '-', bed);
-    //}
-    start[1]+=boxSpacing;
-    stream.write(format(start[0], start[1], start[2]));
-    //for(var col = 0; col<10; col++){
+    }
+    start = newRow(start, '-');
+    for(var col = 0; col<10; col++){
+        if(col%2==0)
+            bed = 'b';
+        else
+            bed = 'f';
         start = knit(start, '+', bed);
-    //}
+    }
 }
 
 //main parser
