@@ -63,48 +63,47 @@ function tuck(start, direction, bed){
     var z = start[2];
 
     x += dx;
-    buffer += format( x, y, z);
+    activeRow.push([x, y, z]);
 
     x += 2*dx;
     z -= dz;
-    buffer += format( x, y, z);
+    activeRow.push([x, y, z]);
 
     y += dy;
     z += 2*dz;
-    buffer += format( x, y ,z);
+    activeRow.push([x, y, z]);
 
     x -= dx;
-    buffer += format( x, y, z);
+    activeRow.push([x, y, z]);
 
     y += dy;
-    buffer += format( x, y, z);
+    activeRow.push([x, y, z]);
 
     x += dx;
     z -= 2*dz;
-    buffer += format( x, y, z);
+    activeRow.push([x, y, z]);
 
     x += dx;
-    buffer += format( x, y, z);
+    activeRow.push([x, y, z]);
 
     x += dx;
     z += 2*dz;
-    buffer += format( x, y, z);
+    activeRow.push([x, y, z]);
 
     y -= dy;
-    buffer += format( x, y, z);
+    activeRow.push([x, y, z]);
 
     x -= dx;
-    buffer += format( x, y, z);
+    activeRow.push([x, y, z]);
 
     y -= dy;
     z -= 2*dz;
-    buffer += format( x, y, z);
+    activeRow.push([x, y, z]);
 
     x += 2*dx;
     z += dz;
-    buffer += format( x, y, z);
+    activeRow.push([x, y, z]);
 
-    stream.write(buffer);
     return [x, y, z];
 }
 
@@ -117,6 +116,14 @@ function xfer(fromSide, fromNeedle, toSide, toNeedle){
 }
 
 function newRow(start, currDir){
+    var buffer = '';
+    for(var i = 0; i<activeRow.length; i++){
+        var point = activeRow[i];
+        buffer += format(point[0], point[1], point[2]);
+    }
+    stream.write(buffer);
+    activeRow = [];
+
     start[1]+=boxSpacing;
     if(currDir == '-') start[0] -= boxWidth/6;
     else start[0] += boxWidth/6;
@@ -129,7 +136,7 @@ function tests(){
     var bed = 'f';
     var direction = '-';
 
-    stream.write(format(start[0], start[1], start[2]));
+    activeRow.push(start);
     for(var col = 0; col<10; col++){
         if(col%2==0)
             bed = 'f';
@@ -145,6 +152,7 @@ function tests(){
             bed = 'f';
         start = knit(start, '+', bed);
     }
+    start = newRow(start, '+');
 }
 
 //main parser
