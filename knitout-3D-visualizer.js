@@ -45,12 +45,16 @@ function errorHandler(err, data){
  *  -bed: the needle bed
  */
 
-function tuck(start, direction, bed){
+function tuck(height, direction, bed, needle){
     var buffer = '';
-    var dx  = boxWidth/6;
+    var dx = boxWidth/5;
     var dy =  boxHeight/3;
     var dz = boxDepth/2;
+    var start = [-needle*boxWidth, height, 0];
+
     if(direction == '-') dx*= -1;
+    else start[0] -= boxWidth;
+
     if(bed=='b'){
         dz*=-1;
         start[2] = -bedDistance;
@@ -62,7 +66,6 @@ function tuck(start, direction, bed){
     var y = start[1];
     var z = start[2];
 
-    x += dx;
     activeRow.push([x, y, z]);
 
     x += 2*dx;
@@ -104,18 +107,17 @@ function tuck(start, direction, bed){
     z += dz;
     activeRow.push([x, y, z]);
 
-    return [x, y, z];
 }
 
-function knit(start, direction, bed){
-    return tuck(start, direction, bed);
+function knit(height, direction, bed, needle){
+    tuck(height, direction, bed, needle);
 }
 
 function xfer(fromSide, fromNeedle, toSide, toNeedle){
 
 }
 
-function newRow(start, currDir){
+function newRow(height, currDir){
     var buffer = '';
     for(var i = 0; i<activeRow.length; i++){
         var point = activeRow[i];
@@ -124,35 +126,35 @@ function newRow(start, currDir){
     stream.write(buffer);
     activeRow = [];
 
-    start[1]+=boxSpacing;
-    if(currDir == '-') start[0] -= boxWidth/6;
-    else start[0] += boxWidth/6;
-    return start;
+    height+=boxSpacing;
+    return height;
 }
 
 //just for testing
 function tests(){
-    var start = [0,0,0];
+    var height = 0;
     var bed = 'f';
     var direction = '-';
 
-    activeRow.push(start);
     for(var col = 0; col<10; col++){
         if(col%2==0)
             bed = 'f';
         else
             bed = 'b';
-        start = tuck(start, '-', bed);
+        tuck(height, '-', bed, col);
     }
-    start = newRow(start, '-');
-    for(var col = 0; col<10; col++){
+    height = newRow(height, '-');
+
+    for(var col = 9; col>=0; col--){
         if(col%2==0)
-            bed = 'b';
-        else
             bed = 'f';
-        start = knit(start, '+', bed);
+        else
+            bed = 'b';
+        knit(height, '+', bed, col);
     }
-    start = newRow(start, '+');
+
+    height = newRow(height, '+');
+
 }
 
 //main parser
