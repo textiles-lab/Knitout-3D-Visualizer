@@ -47,10 +47,12 @@ function errorHandler(err, data){
 
 function tuck(height, direction, bed, needle){
     var buffer = '';
+    var stitch = [];
     var dx = boxWidth/5;
     var dy =  boxHeight/3;
     var dz = boxDepth/2;
     var start = [-needle*boxWidth, height, 0];
+
 
     if(direction == '-') dx*= -1;
     else start[0] -= boxWidth;
@@ -66,46 +68,48 @@ function tuck(height, direction, bed, needle){
     var y = start[1];
     var z = start[2];
 
-    activeRow.push([x, y, z]);
+    stitch.push([x, y, z]);
 
     x += 2*dx;
     z -= dz;
-    activeRow.push([x, y, z]);
+    stitch.push([x, y, z]);
 
     y += dy;
     z += 2*dz;
-    activeRow.push([x, y, z]);
+    stitch.push([x, y, z]);
 
     x -= dx;
-    activeRow.push([x, y, z]);
+    stitch.push([x, y, z]);
 
     y += dy;
-    activeRow.push([x, y, z]);
+    stitch.push([x, y, z]);
 
     x += dx;
     z -= 2*dz;
-    activeRow.push([x, y, z]);
+    stitch.push([x, y, z]);
 
     x += dx;
-    activeRow.push([x, y, z]);
+    stitch.push([x, y, z]);
 
     x += dx;
     z += 2*dz;
-    activeRow.push([x, y, z]);
+    stitch.push([x, y, z]);
 
     y -= dy;
-    activeRow.push([x, y, z]);
+    stitch.push([x, y, z]);
 
     x -= dx;
-    activeRow.push([x, y, z]);
+    stitch.push([x, y, z]);
 
     y -= dy;
     z -= 2*dz;
-    activeRow.push([x, y, z]);
+    stitch.push([x, y, z]);
 
     x += 2*dx;
     z += dz;
-    activeRow.push([x, y, z]);
+    stitch.push([x, y, z]);
+
+    activeRow[needle] = (stitch);
 
 }
 
@@ -114,14 +118,79 @@ function knit(height, direction, bed, needle){
 }
 
 function xfer(fromSide, fromNeedle, toSide, toNeedle){
+    var stitch = activeRow[fromNeedle];
+
+    var height = stitch[0][1];
+    var dx = (stitch[1][0]-stitch[0][0])/2;
+    var dy =  boxHeight/3;
+    var dz = boxDepth/2;
+    var dir = dx>0 ? '+' : '-';
+    var start = [-toNeedle*boxWidth, height, 0];
+
+
+    if(dir == '-') dx*= -1;
+    else start[0] -= boxWidth;
+
+    if(toSide == 'b'){
+        dz*=-1;
+        start[2] = -bedDistance;
+    }else{
+        start[2] = 0;
+    }
+
+    var x = start[0];
+    var y = start[1];
+    var z = start[2];
+
+    x += 2*dx;
+    z -= dz;
+
+    y += dy;
+    z += 2*dz;
+
+    x -= dx;
+    stitch [3] = [x, y, z];
+
+    y += dy;
+    stitch [4] = [x, y, z];
+
+    x += dx;
+    z -= 2*dz;
+    stitch [5] = [x, y, z];
+
+    x += dx;
+    stitch [6] = [x, y, z];
+
+    x += dx;
+    z += 2*dz;
+    stitch [7] = [x, y, z];
+
+    y -= dy;
+    stitch [8] = [x, y, z];
+
+    x -= dx;
+
+    y -= dy;
+    z -= 2*dz;
+
+    x += 2*dx;
+    z += dz;
+
+
 
 }
 
 function newRow(height, currDir){
     var buffer = '';
     for(var i = 0; i<activeRow.length; i++){
-        var point = activeRow[i];
-        buffer += format(point[0], point[1], point[2]);
+        if(currDir == '-')
+            var stitch = activeRow[i];
+        else
+            var stitch = activeRow[activeRow.length-1-i];
+        for(var j = 0; j<stitch.length; j++){
+            var point = stitch[j];
+            buffer += format(point[0], point[1], point[2]);
+        }
     }
     stream.write(buffer);
     activeRow = [];
@@ -153,6 +222,8 @@ function tests(){
         knit(height, '+', bed, col);
     }
 
+    xfer ('f', 0, 'b', 0);
+    xfer ('b', 0, 'f', 1);
     height = newRow(height, '+');
 
 }
