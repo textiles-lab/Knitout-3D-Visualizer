@@ -16,8 +16,8 @@ if (process.argv.length != 4) {
 }
 
 //globals
-let knitoutfile = process.argv[2];
-let textFile = process.argv[3];
+var knitoutFile = process.argv[2];
+var textFile = process.argv[3];
 const fs = require('fs');
 var stream = fs.createWriteStream(textFile);
 var activeRow = [];
@@ -46,12 +46,12 @@ function errorHandler(err, data){
  */
 
 function tuck(height, direction, bed, needle){
-    var buffer = '';
-    var stitch = [];
-    var dx = boxWidth/5;
-    var dy =  boxHeight/3;
-    var dz = boxDepth/2;
-    var start = [-needle*boxWidth, height, 0];
+    let buffer = '';
+    let stitch = [];
+    let dx = boxWidth/5;
+    let dy =  boxHeight/3;
+    let dz = boxDepth/2;
+    let start = [-needle*boxWidth, height, 0];
 
 
     if(direction == '-') dx*= -1;
@@ -64,9 +64,9 @@ function tuck(height, direction, bed, needle){
         start[2] = 0;
     }
 
-    var x = start[0];
-    var y = start[1];
-    var z = start[2];
+    let x = start[0];
+    let y = start[1];
+    let z = start[2];
 
     stitch.push([x, y, z]);
 
@@ -118,14 +118,14 @@ function knit(height, direction, bed, needle){
 }
 
 function xfer(fromSide, fromNeedle, toSide, toNeedle){
-    var stitch = activeRow[fromNeedle];
+    let stitch = activeRow[fromNeedle];
 
-    var height = stitch[0][1];
-    var dx = (stitch[1][0]-stitch[0][0])/2;
-    var dy =  boxHeight/3;
-    var dz = boxDepth/2;
-    var dir = dx>0 ? '+' : '-';
-    var start = [-toNeedle*boxWidth, height, 0];
+    let height = stitch[0][1];
+    let dx = (stitch[1][0]-stitch[0][0])/2;
+    let dy =  boxHeight/3;
+    let dz = boxDepth/2;
+    let dir = dx>0 ? '+' : '-';
+    let start = [-toNeedle*boxWidth, height, 0];
 
 
     if(dir == '-') dx*= -1;
@@ -138,9 +138,9 @@ function xfer(fromSide, fromNeedle, toSide, toNeedle){
         start[2] = 0;
     }
 
-    var x = start[0];
-    var y = start[1];
-    var z = start[2];
+    let x = start[0];
+    let y = start[1];
+    let z = start[2];
 
     x += 2*dx;
     z -= dz;
@@ -182,13 +182,13 @@ function xfer(fromSide, fromNeedle, toSide, toNeedle){
 
 function newRow(height, currDir){
     var buffer = '';
-    for(var i = 0; i<activeRow.length; i++){
+    for(let i = 0; i<activeRow.length; i++){
         if(currDir == '-')
             var stitch = activeRow[i];
         else
             var stitch = activeRow[activeRow.length-1-i];
-        for(var j = 0; j<stitch.length; j++){
-            var point = stitch[j];
+        for(let j = 0; j<stitch.length; j++){
+            let point = stitch[j];
             buffer += format(point[0], point[1], point[2]);
         }
     }
@@ -201,11 +201,11 @@ function newRow(height, currDir){
 
 //just for testing
 function tests(){
-    var height = 0;
-    var bed = 'f';
-    var direction = '-';
+    let height = 0;
+    let bed = 'f';
+    let direction = '-';
 
-    for(var col = 0; col<10; col++){
+    for(let col = 0; col<10; col++){
         if(col%2==0)
             bed = 'f';
         else
@@ -214,7 +214,7 @@ function tests(){
     }
     height = newRow(height, '-');
 
-    for(var col = 9; col>=0; col--){
+    for(let col = 9; col>=0; col--){
         if(col%2==0)
             bed = 'f';
         else
@@ -225,15 +225,46 @@ function tests(){
     xfer ('f', 0, 'b', 0);
     xfer ('b', 0, 'f', 1);
     height = newRow(height, '+');
-
 }
 
 //main parser
+//heavily based on the knitout-dat.js parsing code in knitout-backend
+function main(){
+    let lines = fs.readFileSync(knitoutFile, 'utf8').split('\n');
+    (function checkVersion(){
+        let m = lines[0].match(/^;!knitout-(\d+)$/);
+        if(!m)
+            throw 'File does not start with knitout magic string';
+        if(parseInt(m[1])>2)
+            console.warn('WARNING: File is version '+m[1]
+                    +', but this code only knows about versions up to 2.');
+    })();
 
+    let carriers = {}; //each are a name=>object map
+    let racking = 0.0; //starts centered
+    let stitch = 5; //machine-specific stitch number
 
+    lines.forEach(function(line, lineIdx){
+        let i = line.indexOf(';');
+        if(i>=0) line = line.substr(0,i);
+        let tokens = line.split(/[ ]+/);
 
+        if(tokens.length>0 && tokens[0] ==='') tokens.shift();
+        if(tokens.length>0 && tokens[tokens.length-1] === '') tokens.pop();
 
+        if(tokens.length == 0) return;
 
+        let op = tokens.shift();
+        let args = tokens;
 
+        if(op === 'tuck'|| op === 'knit'){
+            console.log(args);
+        }else if(op === 'xfer'){
+            console.log(args);
+        }
+    });
 
-tests();
+}
+
+//tests();
+main();
