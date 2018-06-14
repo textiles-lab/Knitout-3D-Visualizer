@@ -30,6 +30,61 @@ var bedDistance = 0.25;
 
 
 //helper functions
+
+//BedNeedle helps store needles:
+
+function BedNeedle(bed, needle) {
+	if (arguments.length == 1 && typeof(arguments[0]) === 'string') {
+		let str = arguments[0];
+		let m = str.match(/^([fb]s?)(-?\d+)$/);
+		if (!m) {
+			throw "ERROR: invalid needle specification '" + str + "'.";
+		}
+		this.bed = m[1];
+		this.needle = parseInt(m[2]);
+	} else if (arguments.length == 2 && typeof(arguments[0]) === 'string' && typeof(arguments[1]) === 'number') {
+		this.bed = arguments[0];
+		this.needle = arguments[1];
+	} else {
+		throw "Don't know how to construct a BedNeedle from the given arguments";
+	}
+}
+
+BedNeedle.prototype.toString = function() {
+	return this.bed + this.needle;
+};
+
+BedNeedle.prototype.isFront = function(){
+	if (this.bed === 'f' || this.bed === 'fs') return true;
+	else if (this.bed === 'b' || this.bed === 'bs') return false;
+	else throw "Invalid bed in BedNeedle.";
+};
+
+BedNeedle.prototype.isBack = function(){
+	if (this.bed === 'f' || this.bed === 'fs') return false;
+	else if (this.bed === 'b' || this.bed === 'bs') return true;
+	else throw "Invalid bed in BedNeedle.";
+};
+
+BedNeedle.prototype.isHook = function(){
+	if (this.bed === 'f' || this.bed === 'b') return true;
+	else if (this.bed === 'fs' || this.bed === 'bs') return false;
+	else throw "Invalid bed in BedNeedle.";
+};
+
+BedNeedle.prototype.isSlider = function(){
+	if (this.bed === 'fs' || this.bed === 'bs') return true;
+	else if (this.bed === 'f' || this.bed === 'b') return false;
+	else throw "Invalid bed in BedNeedle.";
+};
+
+//Carrier objects store information about each carrier:
+function Carrier(name) {
+	this.name = name;
+	this.last = null; //last stitch -- {needle:, direction:} -- or null if not yet brought in
+	this.in = null; //the "in" operation that added this to the active set. (format: {op:"in", cs:["", "", ...]})
+}
+
 function format(x, y, z){
     return x+' '+y+' '+z+'\n';
 }
@@ -258,7 +313,12 @@ function main(){
         let args = tokens;
 
         if(op === 'tuck'|| op === 'knit'){
-            console.log(args);
+            let d = args.shift();
+            let n = new BedNeedle(args.shift());
+            let cs = args;
+            //handleIn(cs, info);
+            //merge(new Pass(info));
+            //setLast(cs, d, n);
         }else if(op === 'xfer'){
             console.log(args);
         }
