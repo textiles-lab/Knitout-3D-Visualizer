@@ -114,23 +114,23 @@ function merge_ops(a,b,quarterPitch){
     else if(b===OP_SOFT_MISS)
         return a;
     //see if a/b fit one of the combo ops:
-	if (!quarterPitch) return null;
+    if (!quarterPitch) return null;
     //can't merge front/back ops without quarter pitch racking
-	if (a === OP_MISS_FRONT) {
-		if      (b === OP_MISS_BACK) return OP_MISS_FRONT_MISS_BACK;
-		else if (b === OP_TUCK_BACK) return OP_MISS_FRONT_TUCK_BACK;
-		else if (b === OP_KNIT_BACK) return OP_MISS_FRONT_KNIT_BACK;
-	} else if (a === OP_TUCK_FRONT) {
-		if      (b === OP_MISS_BACK) return OP_TUCK_FRONT_MISS_BACK;
-		else if (b === OP_TUCK_BACK) return OP_TUCK_FRONT_TUCK_BACK;
-		else if (b === OP_KNIT_BACK) return OP_TUCK_FRONT_KNIT_BACK;
-	} else if (a === OP_KNIT_FRONT) {
-		if      (b === OP_MISS_BACK) return OP_KNIT_FRONT_MISS_BACK;
-		else if (b === OP_TUCK_BACK) return OP_KNIT_FRONT_TUCK_BACK;
-		else if (b === OP_KNIT_BACK) return OP_KNIT_FRONT_KNIT_BACK;
-	}
-	//I guess they can't be combined:
-	return null;
+    if (a === OP_MISS_FRONT) {
+        if      (b === OP_MISS_BACK) return OP_MISS_FRONT_MISS_BACK;
+        else if (b === OP_TUCK_BACK) return OP_MISS_FRONT_TUCK_BACK;
+        else if (b === OP_KNIT_BACK) return OP_MISS_FRONT_KNIT_BACK;
+    } else if (a === OP_TUCK_FRONT) {
+        if      (b === OP_MISS_BACK) return OP_TUCK_FRONT_MISS_BACK;
+        else if (b === OP_TUCK_BACK) return OP_TUCK_FRONT_TUCK_BACK;
+        else if (b === OP_KNIT_BACK) return OP_TUCK_FRONT_KNIT_BACK;
+    } else if (a === OP_KNIT_FRONT) {
+        if      (b === OP_MISS_BACK) return OP_KNIT_FRONT_MISS_BACK;
+        else if (b === OP_TUCK_BACK) return OP_KNIT_FRONT_TUCK_BACK;
+        else if (b === OP_KNIT_BACK) return OP_KNIT_FRONT_KNIT_BACK;
+    }
+    //I guess they can't be combined:
+    return null;
 }
 
 //BedNeedle helps store needles:
@@ -468,7 +468,8 @@ function knit(height, direction, bed, needle){
 
 function xfer(fromSide, fromNeedle, toSide, toNeedle){
     let loop = activeRow[fromNeedle];
-
+    console.log(activeRow);
+    console.log(fromNeedle);
     let height = loop[0][1];
     let dx = (loop[1][0]-loop[0][0])/2;
     let dy =  boxHeight/3;
@@ -719,7 +720,7 @@ function main(){
         cs.forEach(function(c){
             console.assert(c in carriers, "carrier not in carrier set");
             carriers[c].last =
-                {needle:n, direction:d, minDistance:MIN_STOPPING_DISTANCE};
+            {needle:n, direction:d, minDistance:MIN_STOPPING_DISTANCE};
         });
     }
 
@@ -795,6 +796,18 @@ function main(){
         let op = tokens.shift();
         let args = tokens;
 
+        //handle synonyms
+        if(op === "amiss"){
+            op = "tuck";
+            args.unshift("+");
+        }else if(op === "drop"){
+            op = "knit";
+            args.unshift("+");
+        }else if(op === "xfer"){
+            op = "split";
+            args.unshift("+");
+        }
+
         if(op === "in" || op === "inhook"){
             let cs = args;
             if(cs.length === 0)
@@ -813,7 +826,81 @@ function main(){
                 carriers[c] = carrier;
             });
         }else if(op === "releasehook"){
-            //TODO
+            let cs = args;
+            if(hook === null){
+                throw "ERROR: Can't releasehook on "+cs+", it's empty.";
+            }else if(JSON.stringify(hook.cs) !== JSON.stringify(cs)){
+                throw "ERROR: Can't releasehook on "+cs+
+                    ", hook currently holds "+hook+".";
+            }
+            let needPass = true;
+            if(passes.length>0){
+                let prev = passes[passes.length-1];
+                if(prev.type === TYPE_KNIT_TUCK && !("hook" in prev)
+                        &&prev.direction === hook.direction){
+                    prev.hook = HOOK_RELEASE;
+                    needPass = false;
+                }
+            }
+            if(needPass){
+                //an attempt to release hook on an empty pass
+                let info = {
+                    type:TYPE_KNIT_TUCK,
+                    direction:hook.direction,
+                    carriers:[],
+                    racking:racking,
+                    stitch:stitch,
+                    hook:HOOK_RELEASE,
+                    slots:{}
+                };
+                info.slots[slotString(carriers[cs[0]].last.needle)] =
+                    OP_SOFT_MISS;
+                passes.push(new Pass(info));
+            }
+            //hook is now empty
+            hook = null;
+        }else if (op === "out" || op === "outhook"){
+            let cs = args;
+            cs.forEach(function(c){
+                if(!(c in carriers))
+                    throw "ERROR: Can't bring out inactive carrier '"+c+".";
+                if(!carriers[c].last){
+                    throw "ERROR: Can't bring out carrier '"+c
+                        +"---it asn't yet stitched.";
+                }
+            });
+
+            if(op === "outhook" && hook !==null)
+                throw "ERROR: Can't outhook carriers "+cs+", hook is holding "
+                    +hook+".";
+            let s = -Infinity;
+            let n = null;
+            cs.forEach(function(c){
+                let t = slotNumber(carriers[c].last.needle);
+                if(t>s){
+                    s = t;
+                    n = carriers[c].last.needle;
+                }
+            });
+            let info = {
+                type:TYPE_KNIT_TUCK,
+                slots:{},
+                racking:racking,
+                stitch:stitch,
+                carriers:cs,
+                direction: DIRECTION_RIGHT,
+                gripper:GRIPPER_OUT
+            };
+            info.slots[slotString(n)] = OP_SOFT_MISS;
+
+            if(op === "outhook") info.hook = HOOK_OUT;
+            merge(new Pass(info));
+
+            //remove carriers from active set:
+            cs.forEach(function(c){
+                delete carriers[c];
+            });
+
         }else if(op === "tuck"|| op === "knit"){
             let d = args.shift();
             let n = new BedNeedle(args.shift());
@@ -848,9 +935,9 @@ function main(){
                     //presserMode:presserMode (also does nothing bc idk what it is)
             }
 
-            if(op==="miss") info.slots[slotString(n)] =
+            if(op === "miss") info.slots[slotString(n)] =
                 n.isFront() ? OP_MISS_FRONT : OP_MISS_BACK;
-            else if(op==="tuck") info.slots[slotString(n)] =
+            else if(op === "tuck") info.slots[slotString(n)] =
                 n.isFront() ? OP_TUCK_FRONT : OP_TUCK_BACK;
             else if(op === "knit") info.slots[slotString(n)] =
                 n.isFront() ? OP_KNIT_FRONT : OP_KNIT_BACK;
@@ -859,8 +946,88 @@ function main(){
             handleIn(cs, info);
             merge(new Pass(info));
             setLast(cs, d, n);
-        }else if(op === "xfer"){
-            //console.log(args);
+        } else if(op === "rack"){
+            if(args.legnth !== 1) throw "ERROR: racking takes one argument";
+            if(!/^[+-]?\d*\.?\d+$/.test(args[0]))
+                throw "ERROR: racking must be a number";
+            let newRacking = parseFloat(args.shift());
+            let frac = newRacking-Math.floor(newRcking);
+            if(frac != 0.0 && frac != .025)
+                throw "ERROR: racking must be an integer or an integer+0.25";
+            racking = newRacking;
+            console.log(racking);
+        }else if(op === "split"){
+            let d = args.shift();
+            let n = new BedNeedle(args.shift()); //from needle
+            let t = new BedNeedle(args.shift()); //to needle
+            let cs = args;
+
+            //make sure that 't' and 'n' align reasonably:
+            if(n.isBack() && t.isFront()){
+                if(n.needle+racking !== t.needle){
+                    throw "ERROR: needles '"+n+"' and '"+t
+                        +"' are not aligned at racking "+racking+".";
+                }
+            }else if(n.isFront() && t.isBack()){
+                if(n.needle !== t.needle+racking){
+                    throw "ERROR: needles '"+n+"' and '"+t
+                        +"' are not aligned at racking "+racking+".";
+                }
+            }
+            let op;
+            let type;
+            //make sure this is a valid operation, and fill in proper OP
+            if(n.isHook && t.isHook()){
+                if(cs.length === 0){
+                    type = TYPE_XFER;
+                    op = n.isFront() ? OP_XFER_TO_BACK : OP_XFER_TO_FRONT;
+                }else{
+                    type = TYPE_SPLIT;
+                    op = n.isFront() ? OP_SPLIT_TO_BACK : OP_SPLIT_TO_FRONT;
+                }
+            }else if(n.isSlider() && t.isHook()){
+                if(cs.length === 0) {
+                    type = TYPE_XFER_FROM_SLIDERS;
+                    op = n.isFront() ? OP_XFER_TO_BACK : OP_XFER_TO_FRONT;
+                }else{
+                    throw "ERROR: cannot split from slider.";
+                }
+            }else if(n.isHook() && t.isSlider()){
+                if(cs.length === 0) {
+                    type = TYPE_XFER_TO_SLIDERS;
+                    op = n.isFront() ? OP_XFER_TO_BACK : OP_XFER_TO_FRONT;
+                }else {
+                    type = TYPE_SPLIT_VIA_SLIDERS;
+                    op = n.isFront() ? OP_SPLIT_TO_BACK : OP_SPLIT_TO_FRONT;
+                }
+            }else{
+                throw "ERROR: cannot move from slider to slider.";
+            }
+
+            if(cs.length === 0){
+                d = ""; //xfer is directionless
+            }
+            kickOthers(n, cs);
+
+            let info = {
+                type:type,
+                slots:{},
+                racking:racking,
+                stitch:stitch,
+                carriers:cs,
+                direction:d
+            };
+            info.slots[slotString(n)] = op;
+
+            handleIn(cs, info);
+            merge(new Pass(info));
+            setLast(cs, d, n);
+        }else if(op === "pause"){
+            //no pauses for this
+        }else if(op.match(/^x-/)){
+            console.warn("WARNING: unsupported extension operation '"+op+"'.");
+        }else{
+            throw "ERROR: unsupported operation '"+op+"'.";
         }
     });
 
@@ -887,7 +1054,22 @@ function main(){
             if(color == 11)
                 tuck(height, direction, bed, needle);
             else if(color == 51)
-                knit(height, direction, bed, needle);
+                knit(height, direction, 'f', needle);
+            else if(color == 52)
+                knit(height, direction, 'b', needle);
+            else if(color == 30){
+                //xfer back to front
+                xfer('b', needle, 'f', needle-racking);
+            }
+            else if(color == 20){
+                //xfer front to back
+                xfer('f', needle, 'b', needle+racking);
+            }
+            else if(color == 16){
+                //soft miss: do nothing?
+            }else{
+                console.log(color+": not yet implemented");
+            }
         }
         height = newRow(height, direction);
     });
