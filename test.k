@@ -31,35 +31,5 @@ tuck - f8 6
 tuck - f6 6
 tuck - f4 6
 tuck - f2 6
-tuck + f1 6
-tuck + f3 6
-tuck + f5 6
-tuck + f7 6
-tuck + f9 6
-tuck + f11 6
-tuck + f13 6
-tuck + f15 6
-tuck + f17 6
-tuck + f19 6
-tuck + f21 6
-tuck + f23 6
-tuck + f25 6
-tuck + f27 6
-tuck + f29 6
-tuck + f31 6
-tuck + f33 6
-tuck + f35 6
-tuck + f37 6
-tuck + f39 6
-tuck + f41 6
-tuck + f43 6
-tuck + f45 6
-tuck + f47 6
-tuck + f49 6
-tuck + f51 6
-tuck + f53 6
-tuck + f55 6
-tuck + f57 6
-tuck + f59 6
 releasehook 6
 outhook 6

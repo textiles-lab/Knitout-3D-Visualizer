@@ -272,7 +272,7 @@ Pass.prototype.hasBack = function(){
     return false;
 };
 Pass.prototype.append = function(pass){
-    if(!["type", "rackign", "stitch", "direction", "carriers"].every(function(name){
+    if(!["type", "racking", "stitch", "direction", "carriers"].every(function(name){
         return JSON.stringify(this[name])===JSON.stringify(pass[name]);
     }, this)){
         return false;
@@ -298,7 +298,6 @@ Pass.prototype.append = function(pass){
     }else{
         return false;
     }
-
     let quarterPitch = (this.racking-Math.floor(this.racking)) != 0.0;
     if(this.direction === DIRECTION_RIGHT){
         //new operation needs to be on the right of other ops
@@ -323,9 +322,9 @@ Pass.prototype.append = function(pass){
         }
         for(let s in pass.slots){
             s = parseInt(s);
-            if(s>min)
+            if(s>min){
                 return false;
-            else if(s===min){
+            }else if(s===min){
                 if(merge_ops(pass.slots[s], this.slots[s], quarterPitch)
                         === null){
                     return false;
@@ -346,10 +345,15 @@ Pass.prototype.append = function(pass){
             }
         }
     }
-
     //merge hook and gripper properties
-    this.hook = pass.hook;
-    this.gripper = pass.gripper;
+    if(!("hook" in this) && ("hook" in pass))
+        this.hook = pass.hook;
+    else
+        console.assert(!("hook" in pass), "we checked this");
+    if(!("gripper" in this) && ("gripper" in pass))
+        this.gripper = pass.gripper;
+    else
+        console.assert(!("gripper" in pass), "we checked this");
 
     //merge slots
     for(let s in pass.slots){
@@ -607,6 +611,7 @@ function main(){
             if(inInfo.op === "in"){
                 info.gripper = GRIPPER_IN;
             }else if(inInfo.op === "inhook"){
+                info.gripper = GRIPPER_IN;
                 info.hook = HOOK_IN;
                 if(hook !== null)
                     throw "ERROR: can't bring in "+JSON.stringify(cs)
@@ -619,7 +624,9 @@ function main(){
     }
 
     function merge(pass, shouldNotKick) {
-        if(passes.length == 0 || passes[passes.length-1].append(pass)){
+        if(passes.length !== 0 && passes[passes.length-1].append(pass)){
+            //merged fine
+        }else{
             //starting a new pass
             //If there are carriers, make sure they start on pass'scorrect side:
             //which slot is this pass acting on?
@@ -704,6 +711,16 @@ function main(){
                 passes.push(pass);
             }
         }
+    }
+
+    //update the .last member of the given carriers
+    function setLast(cs, d, n){
+        console.assert(typeof(n)==='object', "setLast needs a needle.");
+        cs.forEach(function(c){
+            console.assert(c in carriers, "carrier not in carrier set");
+            carriers[c].last =
+                {needle:n, direction:d, minDistance:MIN_STOPPING_DISTANCE};
+        });
     }
 
     //if carriers not named in "cs" have last set, kick so they won't overlap n
@@ -841,7 +858,7 @@ function main(){
 
             handleIn(cs, info);
             merge(new Pass(info));
-            //setLast(cs, d, n);
+            setLast(cs, d, n);
         }else if(op === "xfer"){
             //console.log(args);
         }
@@ -867,14 +884,12 @@ function main(){
             let bed = pass.slots[s].isFront ? 'f' : 'b';
             let color = pass.slots[s].color;
             direction = pass.direction;
-            console.log(bed+needle);
             if(color == 11)
                 tuck(height, direction, bed, needle);
             else if(color == 51)
                 knit(height, direction, bed, needle);
         }
         height = newRow(height, direction);
-        console.log(height);
     });
 
 }
