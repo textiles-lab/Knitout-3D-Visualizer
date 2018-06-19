@@ -379,6 +379,23 @@ Pass.prototype.append = function(pass){
     return true;
 };
 
+//stores points for the entire knitted yarn thing
+let yarn = [];
+//stores index->object of last stitch the needle was active on
+let lastActive = [];
+
+//stores things for each new pass with yarn
+function yarnPass(loops, direction){
+    this.loops = loops;
+    this.direction = direction;
+}
+
+//stores things for each needle with yarn on it
+function loop(info){
+    //ctrlPts: the coordinates of each point on the loop
+    this.ctrlPts = info;
+}
+
 function format(x, y, z){
     return x+" "+y+" "+z+"\n";
 }
@@ -394,13 +411,13 @@ function errorHandler(err, data){
  *  -bed: the needle bed
  */
 
-function tuck(height, direction, bed, needle){
-    let buffer = "";
-    let loop = [];
+function tuck(row, direction, bed, needle){
+    let info = [];
     let dx = boxWidth/5;
     let dy =  boxHeight/3;
     let dz = boxDepth/2;
-    let start = [-needle*boxWidth, height, 0];
+    let height = row*boxSpacing;
+    let start = [needle*boxWidth, height, 0];
 
 
     if(direction == "-") dx*= -1;
@@ -417,66 +434,71 @@ function tuck(height, direction, bed, needle){
     let y = start[1];
     let z = start[2];
 
-    loop.push([x, y, z]);
+    info.push([x, y, z]);
 
     x += 2*dx;
     z -= dz;
-    loop.push([x, y, z]);
+    info.push([x, y, z]);
 
     y += dy;
     z += 2*dz;
-    loop.push([x, y, z]);
+    info.push([x, y, z]);
 
     x -= dx;
-    loop.push([x, y, z]);
+    info.push([x, y, z]);
 
     y += dy;
-    loop.push([x, y, z]);
+    info.push([x, y, z]);
 
     x += dx;
     z -= 2*dz;
-    loop.push([x, y, z]);
+    info.push([x, y, z]);
 
     x += dx;
-    loop.push([x, y, z]);
+    info.push([x, y, z]);
 
     x += dx;
     z += 2*dz;
-    loop.push([x, y, z]);
+    info.push([x, y, z]);
 
     y -= dy;
-    loop.push([x, y, z]);
+    info.push([x, y, z]);
 
     x -= dx;
-    loop.push([x, y, z]);
+    info.push([x, y, z]);
 
     y -= dy;
     z -= 2*dz;
-    loop.push([x, y, z]);
+    info.push([x, y, z]);
 
     x += 2*dx;
     z += dz;
-    loop.push([x, y, z]);
+    info.push([x, y, z]);
 
-    activeRow[needle] = (loop);
+    let newLoop = new loop(info);
+    if(yarn[row]){
+        yarn[row].loops[needle] = newLoop;
+    }else{
+        let newRow = [];
+        newRow[needle] = newLoop;
+        yarn[row] = new yarnPass(newRow, direction);
+    }
+    activeRow[needle] = yarn[row].loops[needle];
 
 }
 
-function knit(height, direction, bed, needle){
-    tuck(height, direction, bed, needle);
+function knit(row, direction, bed, needle){
+    tuck(row, direction, bed, needle);
 }
 
 function xfer(fromSide, fromNeedle, toSide, toNeedle){
-    let loop = activeRow[fromNeedle];
-    console.log(activeRow);
-    console.log(fromNeedle);
-    let height = loop[0][1];
-    let dx = (loop[1][0]-loop[0][0])/2;
+    let info = activeRow[fromNeedle].ctrlPts;
+    let height = info[0][1];
+    let dx = (info[1][0]-info[0][0])/2;
     let dy =  boxHeight/3;
     let dz = boxDepth/2;
     let dir = dx>0 ? "+" : "-";
-    let start = [-toNeedle*boxWidth, height, 0];
-
+    let start = [toNeedle*boxWidth, height, 0];
 
     if(dir == "-") dx*= -1;
     else start[0] -= boxWidth;
@@ -499,24 +521,24 @@ function xfer(fromSide, fromNeedle, toSide, toNeedle){
     z += 2*dz;
 
     x -= dx;
-    loop [3] = [x, y, z];
+    info [3] = [x, y, z];
 
     y += dy;
-    loop [4] = [x, y, z];
+    info [4] = [x, y, z];
 
     x += dx;
     z -= 2*dz;
-    loop [5] = [x, y, z];
+    info [5] = [x, y, z];
 
     x += dx;
-    loop [6] = [x, y, z];
+    info [6] = [x, y, z];
 
     x += dx;
     z += 2*dz;
-    loop [7] = [x, y, z];
+    info [7] = [x, y, z];
 
     y -= dy;
-    loop [8] = [x, y, z];
+    info [8] = [x, y, z];
 
     x -= dx;
 
@@ -525,59 +547,27 @@ function xfer(fromSide, fromNeedle, toSide, toNeedle){
 
     x += 2*dx;
     z += dz;
-
-
-
 }
 
-function newRow(height, currDir){
-    let buffer = "";
-    for(let i = 0; i<activeRow.length; i++){
-        let loop;
-        if(currDir == "-")
-            loop = activeRow[i];
-        else
-            loop = activeRow[activeRow.length-1-i];
-        if(loop){
-            for(let j = 0; j<loop.length; j++){
-                let point = loop[j];
-                buffer += format(point[0], point[1], point[2]);
+function makeTxt(){
+    for(let row = 0; row<yarn.length; row++){
+        let dir = yarn[row].direction;
+        let yarnRow = yarn[row].loops;
+        for(let col = 0; col<yarnRow.length; col++){
+            let needle = col;
+            if(dir == '-') needle = yarnRow.length-col-1;
+
+            let loop = yarnRow[needle];
+            if(loop){
+                let pts = loop.ctrlPts;
+                for(let j = 0; j<pts.length; j++){
+                    let pt = pts[j];
+                    stream.write(format(pt[0], pt[1], pt[2]));
+                }
             }
+
         }
     }
-    stream.write(buffer);
-    activeRow = [];
-
-    height+=boxSpacing;
-    return height;
-}
-
-//just for testing
-function tests(){
-    let height = 0;
-    let bed = "f";
-    let direction = "-";
-
-    for(let col = 0; col<10; col++){
-        if(col%2==0)
-            bed = "f";
-        else
-            bed = "b";
-        tuck(height, "-", bed, col);
-    }
-    height = newRow(height, "-");
-
-    for(let col = 9; col>=0; col--){
-        if(col%2==0)
-            bed = "f";
-        else
-            bed = "b";
-        knit(height, "+", bed, col);
-    }
-
-    xfer ("f", 0, "b", 0);
-    xfer ("b", 0, "f", 1);
-    height = newRow(height, "+");
 }
 
 //main parser
@@ -955,7 +945,6 @@ function main(){
             if(frac != 0.0 && frac != .025)
                 throw "ERROR: racking must be an integer or an integer+0.25";
             racking = newRacking;
-            console.log(racking);
         }else if(op === "split"){
             let d = args.shift();
             let n = new BedNeedle(args.shift()); //from needle
@@ -1042,21 +1031,24 @@ function main(){
     });
     console.log("Slots lie in ["+minSlot+", "+maxSlot+"].");
 
-    let height = 0;
     let row = 0;
     passes.forEach(function(pass){
         let direction;
+        let empty = true; //pass is all soft misses
+
         for(let s in pass.slots){
-            let needle = s;
+            let needle = parseInt(s);
             let bed = pass.slots[s].isFront ? 'f' : 'b';
             let color = pass.slots[s].color;
             direction = pass.direction;
+            if(color !==16) empty = false;
+
             if(color == 11)
-                tuck(height, direction, bed, needle);
+                tuck(row, direction, bed, needle);
             else if(color == 51)
-                knit(height, direction, 'f', needle);
+                knit(row, direction, 'f', needle);
             else if(color == 52)
-                knit(height, direction, 'b', needle);
+                knit(row, direction, 'b', needle);
             else if(color == 30){
                 //xfer back to front
                 xfer('b', needle, 'f', needle-racking);
@@ -1071,8 +1063,12 @@ function main(){
                 console.log(color+": not yet implemented");
             }
         }
-        height = newRow(height, direction);
+        if (pass.type === TYPE_KNIT_TUCK != empty){
+            row++;
+        }
     });
+
+    makeTxt();
 
 }
 
