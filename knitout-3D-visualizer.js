@@ -416,7 +416,8 @@ function tuck(row, direction, bed, needle){
     let dx = boxWidth/5;
     let dy =  boxHeight/3;
     let dz = boxDepth/2;
-    let height = row*boxSpacing;
+    let height = activeRow[needle] ?
+                activeRow[needle].ctrlPts[0][1] + boxSpacing : 0;
     let start = [needle*boxWidth, height, 0];
 
 
@@ -497,15 +498,14 @@ function xfer(fromSide, fromNeedle, toSide, toNeedle){
     let dx = (info[1][0]-info[0][0])/2;
     let dy =  boxHeight/3;
     let dz = boxDepth/2;
-    let dir = dx>0 ? "+" : "-";
+    let dir = dx<0 ? "+" : "-";
     let start = [toNeedle*boxWidth, height, 0];
 
-    if(dir == "-") dx*= -1;
-    else start[0] -= boxWidth;
+    if(dir === '-') start[0]-=boxWidth;
 
     if(toSide == "b"){
         dz*=-1;
-        start[2] = -bedDistance;
+        start[2] = -bedDistance-1;
     }else{
         start[2] = 0;
     }
@@ -937,11 +937,11 @@ function main(){
             merge(new Pass(info));
             setLast(cs, d, n);
         } else if(op === "rack"){
-            if(args.legnth !== 1) throw "ERROR: racking takes one argument";
+            if(args.length !== 1) throw "ERROR: racking takes one argument";
             if(!/^[+-]?\d*\.?\d+$/.test(args[0]))
                 throw "ERROR: racking must be a number";
             let newRacking = parseFloat(args.shift());
-            let frac = newRacking-Math.floor(newRcking);
+            let frac = newRacking-Math.floor(newRacking);
             if(frac != 0.0 && frac != .025)
                 throw "ERROR: racking must be an integer or an integer+0.25";
             racking = newRacking;
@@ -1044,18 +1044,20 @@ function main(){
             if(color !==16) empty = false;
 
             if(color == 11)
-                tuck(row, direction, bed, needle);
+                tuck(row, direction, 'f', needle);
+            else if(color == 12)
+                tuck(row, direction, 'b', needle);
             else if(color == 51)
                 knit(row, direction, 'f', needle);
             else if(color == 52)
                 knit(row, direction, 'b', needle);
             else if(color == 30){
                 //xfer back to front
-                xfer('b', needle, 'f', needle-racking);
+                xfer('b', needle-racking, 'f', needle);
             }
             else if(color == 20){
                 //xfer front to back
-                xfer('f', needle, 'b', needle+racking);
+                xfer('f', needle, 'b', needle-racking);
             }
             else if(color == 16){
                 //soft miss: do nothing?

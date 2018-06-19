@@ -1,10 +1,10 @@
 ;!knitout-2
-;;Carriers: 6
-inhook 6
-tuck - f60 6
-tuck - f58 6
-tuck + f57 6
-tuck + f59 6
-xfer f57 b57
-releasehook 6
-
+;;Carriers: 8
+inhook 8
+tuck - b60 8
+tuck + b59 8
+releasehook 8
+knit - b60 8
+knit - b59 8
+rack -1
+xfer b60 f59
