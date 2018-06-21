@@ -6,6 +6,8 @@
  * Takes a knitout file and turns it into an .txt file. The result should
  * be a series of 3D coordinates with each component delineated by a space and
  * each new coordinate separated by a new line.
+ * Carriers will be marked in the resultant file by a "c" preceding the coordinates
+ * of that carrier.
  */
 
 //parse command line
@@ -20,14 +22,21 @@ var knitoutFile = process.argv[2];
 var textFile = process.argv[3];
 const fs = require("fs");
 var stream = fs.createWriteStream(textFile);
-var activeRow = [];
+var frontActiveRow = [];
+var backActiveRow = [];
 var passes = [];
 
 var boxWidth = 1;
 var boxHeight = 1;
 var boxDepth = 0.1;
 var boxSpacing = boxHeight/2;
-var bedDistance = 0.25;
+
+//layer depths
+const FRONT_BED = 1;
+const BACK_BED = -1;
+const CARRIERS = 0;
+const FRONT_SLIDERs = 0.5;
+const BACK_SLIDERS = -0.5;
 
 //different pass types:
 const TYPE_KNIT_TUCK = 'knit-tuck';
@@ -404,6 +413,36 @@ function errorHandler(err, data){
     if(err) return console.error(err);
 }
 
+//gets yarn "height" of neighbors
+function neighborHeight(bed, needle){
+    let left = needle-1;
+    let right = needle-1;
+    let activeRow = bed === 'f' ? frontActiveRow : backActiveRow;
+    while(left>=0||right<activeRow.length){
+        if(left>=0){
+            if(activeRow[left]) return activeRow[left][0].ctrlPts[0][1];
+            else left--;
+        }
+        if(right<activeRow.length){
+            if(activeRow[right]) return activeRow[right][0].ctrlPts[0][1];
+            else right++;
+        }
+    }
+    return 0;
+}
+
+//gets lowest "height" of a stitch on a certain active needle
+function minHeight(needle){
+    let min = Infinity;
+    if(typeof(needle) !== "object"){
+            needle.forEach(function(loop){
+            min = Math.min(min, loop.ctrlPts[0][1]);
+        });
+    }else
+        min = needle[0].ctrlPts[0][1];
+    return min;
+}
+
 /*basic knitout functions
  * each should take:
  *  -start: array of components of the start position
@@ -416,8 +455,10 @@ function tuck(row, direction, bed, needle){
     let dx = boxWidth/5;
     let dy =  boxHeight/3;
     let dz = boxDepth/2;
+
+    let activeRow = (bed==='f' ? frontActiveRow : backActiveRow);
     let height = activeRow[needle] ?
-                activeRow[needle].ctrlPts[0][1] + boxSpacing : 0;
+        minHeight(activeRow[needle]) + boxSpacing : neighborHeight(bed, needle);
     let start = [needle*boxWidth, height, 0];
 
 
@@ -426,9 +467,9 @@ function tuck(row, direction, bed, needle){
 
     if(bed=="b"){
         dz*=-1;
-        start[2] = -bedDistance;
+        start[2] = BACK_BED;
     }else{
-        start[2] = 0;
+        start[2] = FRONT_BED;
     }
 
     let x = start[0];
@@ -484,8 +525,7 @@ function tuck(row, direction, bed, needle){
         newRow[needle] = newLoop;
         yarn[row] = new yarnPass(newRow, direction);
     }
-    activeRow[needle] = yarn[row].loops[needle];
-
+    activeRow[needle] = [yarn[row].loops[needle]];
 }
 
 function knit(row, direction, bed, needle){
@@ -493,21 +533,31 @@ function knit(row, direction, bed, needle){
 }
 
 function xfer(fromSide, fromNeedle, toSide, toNeedle){
-    let info = activeRow[fromNeedle].ctrlPts;
-    let height = info[0][1];
+
+    let fromActiveRow = fromSide === 'f' ? frontActiveRow : backActiveRow;
+    let toActiveRow = toSide === 'f' ? frontActiveRow : backActiveRow;
+    if(!fromActiveRow[fromNeedle]){
+        console.warn("Hmmm why are you trying to transfer from a needle without yarn? Ignored the instruction for now");
+        return;
+    }
+
+    let info = fromActiveRow[fromNeedle][0].ctrlPts;
+    console.log(fromActiveRow[fromNeedle]);
+    let height = toActiveRow[toNeedle] ?
+        minHeight(toActiveRow[toNeedle]) : info[0][1];
     let dx = (info[1][0]-info[0][0])/2;
     let dy =  boxHeight/3;
     let dz = boxDepth/2;
-    let dir = dx<0 ? "+" : "-";
+    let dir = dx<0 ? "-" : "+";
     let start = [toNeedle*boxWidth, height, 0];
 
-    if(dir === '-') start[0]-=boxWidth;
+    if(dir === '+') start[0]-=boxWidth;
 
     if(toSide == "b"){
         dz*=-1;
-        start[2] = -bedDistance-1;
+        start[2] = BACK_BED;
     }else{
-        start[2] = 0;
+        start[2] = FRONT_BED;
     }
 
     let x = start[0];
@@ -547,6 +597,13 @@ function xfer(fromSide, fromNeedle, toSide, toNeedle){
 
     x += 2*dx;
     z += dz;
+
+    if(toActiveRow[toNeedle])
+        toActiveRow[toNeedle].push(fromActiveRow[fromNeedle]);
+    else
+        toActiveRow[toNeedle] = [fromActiveRow[fromNeedle]];
+    fromActiveRow[fromNeedle] = undefined;
+
 }
 
 function makeTxt(){
@@ -944,6 +1001,7 @@ function main(){
             let frac = newRacking-Math.floor(newRacking);
             if(frac != 0.0 && frac != .025)
                 throw "ERROR: racking must be an integer or an integer+0.25";
+
             racking = newRacking;
         }else if(op === "split"){
             let d = args.shift();
@@ -1016,7 +1074,7 @@ function main(){
         }else if(op.match(/^x-/)){
             console.warn("WARNING: unsupported extension operation '"+op+"'.");
         }else{
-            throw "ERROR: unsupported operation '"+op+"'.";
+            console.warn("WARNING: unsupported operation '"+op+"'. Ignored.");
         }
     });
 
@@ -1053,11 +1111,10 @@ function main(){
                 knit(row, direction, 'b', needle);
             else if(color == 30){
                 //xfer back to front
-                xfer('b', needle-racking, 'f', needle);
-            }
-            else if(color == 20){
+                xfer('b', needle-pass.racking, 'f', needle);
+            }else if(color == 20){
                 //xfer front to back
-                xfer('f', needle, 'b', needle-racking);
+                xfer('f', needle, 'b', needle-pass.racking);
             }
             else if(color == 16){
                 //soft miss: do nothing?
