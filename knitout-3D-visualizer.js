@@ -417,15 +417,17 @@ function errorHandler(err, data){
 function neighborHeight(bed, needle){
     let left = needle-1;
     let right = needle-1;
-    let activeRow = bed === 'f' ? frontActiveRow : backActiveRow;
+    let activeRow = (bed==='f' ? frontActiveRow : backActiveRow);
     while(left>=0||right<activeRow.length){
         if(left>=0){
-            if(activeRow[left]) return activeRow[left][0].ctrlPts[0][1];
-            else left--;
+            if(activeRow[left]){
+                return minHeight(activeRow[left]);
+            }else left--;
         }
         if(right<activeRow.length){
-            if(activeRow[right]) return activeRow[right][0].ctrlPts[0][1];
-            else right++;
+            if(activeRow[right]){
+                return minHeight(activeRow[right]);
+            }else right++;
         }
     }
     return 0;
@@ -434,12 +436,9 @@ function neighborHeight(bed, needle){
 //gets lowest "height" of a stitch on a certain active needle
 function minHeight(needle){
     let min = Infinity;
-    if(typeof(needle) !== "object"){
-            needle.forEach(function(loop){
-            min = Math.min(min, loop.ctrlPts[0][1]);
-        });
-    }else
-        min = needle[0].ctrlPts[0][1];
+    for(let i = 0; i<needle.length; i++){
+        min = Math.min(min, needle[i].ctrlPts[0][1]);
+    }
     return min;
 }
 
@@ -457,8 +456,89 @@ function tuck(row, direction, bed, needle){
     let dz = boxDepth/2;
 
     let activeRow = (bed==='f' ? frontActiveRow : backActiveRow);
-    let height = activeRow[needle] ?
-        minHeight(activeRow[needle]) + boxSpacing : neighborHeight(bed, needle);
+    let height = (activeRow[needle] ?
+            minHeight(activeRow[needle])+boxSpacing : neighborHeight(bed, needle));
+    let start = [needle*boxWidth, height, 0];
+
+
+    if(direction == "-") dx*= -1;
+    else start[0] -= boxWidth;
+
+    if(bed=="b"){
+        dz*=-1;
+        start[2] = BACK_BED;
+    }else{
+        start[2] = FRONT_BED;
+    }
+
+    let x = start[0];
+    let y = start[1];
+    let z = start[2];
+
+    info.push([x, y, z]);
+
+    x += 2*dx;
+    z -= dz;
+    info.push([x, y, z]);
+
+    y += dy;
+    z += 2*dz;
+    info.push([x, y, z]);
+
+    x -= dx;
+    info.push([x, y, z]);
+
+    y += dy;
+    info.push([x, y, z]);
+
+    x += dx;
+    z -= 2*dz;
+    info.push([x, y, z]);
+
+    x += dx;
+    info.push([x, y, z]);
+
+    x += dx;
+    z += 2*dz;
+    info.push([x, y, z]);
+
+    y -= dy;
+    info.push([x, y, z]);
+
+    x -= dx;
+    info.push([x, y, z]);
+
+    y -= dy;
+    z -= 2*dz;
+    info.push([x, y, z]);
+
+    x += 2*dx;
+    z += dz;
+    info.push([x, y, z]);
+
+    let newLoop = new loop(info);
+    if(yarn[row]){
+        yarn[row].loops[needle] = newLoop;
+    }else{
+        let newRow = [];
+        newRow[needle] = newLoop;
+        yarn[row] = new yarnPass(newRow, direction);
+    }
+    if(activeRow[needle])
+        activeRow[needle].push(yarn[row].loops[needle]);
+    else
+        activeRow[needle] = [yarn[row].loops[needle]];
+}
+
+function knit(row, direction, bed, needle){
+    let info = [];
+    let dx = boxWidth/5;
+    let dy =  boxHeight/3;
+    let dz = boxDepth/2;
+
+    let activeRow = (bed==='f' ? frontActiveRow : backActiveRow);
+    let height = (activeRow[needle] ?
+            minHeight(activeRow[needle])+boxSpacing : neighborHeight(bed, needle));
     let start = [needle*boxWidth, height, 0];
 
 
@@ -528,27 +608,26 @@ function tuck(row, direction, bed, needle){
     activeRow[needle] = [yarn[row].loops[needle]];
 }
 
-function knit(row, direction, bed, needle){
-    tuck(row, direction, bed, needle);
-}
-
 function xfer(fromSide, fromNeedle, toSide, toNeedle){
 
-    let fromActiveRow = fromSide === 'f' ? frontActiveRow : backActiveRow;
-    let toActiveRow = toSide === 'f' ? frontActiveRow : backActiveRow;
+    let fromActiveRow = (fromSide==='f' ? frontActiveRow : backActiveRow);
+    let toActiveRow = (toSide==='f' ? frontActiveRow : backActiveRow);
     if(!fromActiveRow[fromNeedle]){
         console.warn("Hmmm why are you trying to transfer from a needle without yarn? Ignored the instruction for now");
         return;
     }
 
-    let info = fromActiveRow[fromNeedle][0].ctrlPts;
-    console.log(fromActiveRow[fromNeedle]);
-    let height = toActiveRow[toNeedle] ?
-        minHeight(toActiveRow[toNeedle]) : info[0][1];
-    let dx = (info[1][0]-info[0][0])/2;
+    let info = fromActiveRow[fromNeedle];
+    let height = (toActiveRow[toNeedle] ?
+            minHeight(toActiveRow[toNeedle])
+            : neighborHeight(toSide, toNeedle));
+    if(!info[0].ctrlPts){
+        console.log(info[0]);
+    }
+    let dx = (info[0].ctrlPts[1][0]-info[0].ctrlPts[0][0])/2;
     let dy =  boxHeight/3;
     let dz = boxDepth/2;
-    let dir = dx<0 ? "-" : "+";
+    let dir = (dx<0 ? "-" : "+");
     let start = [toNeedle*boxWidth, height, 0];
 
     if(dir === '+') start[0]-=boxWidth;
@@ -571,24 +650,36 @@ function xfer(fromSide, fromNeedle, toSide, toNeedle){
     z += 2*dz;
 
     x -= dx;
-    info [3] = [x, y, z];
+    for(let i = 0; i<info.length; i++){
+        info[i].ctrlPts[3] = [x, y, z];
+    }
 
     y += dy;
-    info [4] = [x, y, z];
+    for(let i = 0; i<info.length; i++){
+        info[i].ctrlPts[4] = [x, y, z];
+    }
 
     x += dx;
     z -= 2*dz;
-    info [5] = [x, y, z];
+    for(let i = 0; i<info.length; i++){
+        info[i].ctrlPts[5] = [x, y, z];
+    }
 
     x += dx;
-    info [6] = [x, y, z];
+    for(let i = 0; i<info.length; i++){
+        info[i].ctrlPts[6] = [x, y, z];
+    }
 
     x += dx;
     z += 2*dz;
-    info [7] = [x, y, z];
+    for(let i = 0; i<info.length; i++){
+        info[i].ctrlPts[7] = [x, y, z];
+    }
 
     y -= dy;
-    info [8] = [x, y, z];
+    for(let i = 0; i<info.length; i++){
+        info[i].ctrlPts[8] = [x, y, z];
+    }
 
     x -= dx;
 
@@ -599,10 +690,11 @@ function xfer(fromSide, fromNeedle, toSide, toNeedle){
     z += dz;
 
     if(toActiveRow[toNeedle])
-        toActiveRow[toNeedle].push(fromActiveRow[fromNeedle]);
+        for(let i = 0; i<info.length; i++)
+            toActiveRow[toNeedle].push(info[i]);
     else
-        toActiveRow[toNeedle] = [fromActiveRow[fromNeedle]];
-    fromActiveRow[fromNeedle] = undefined;
+        toActiveRow[toNeedle] = info;
+    info = undefined;
 
 }
 
@@ -983,11 +1075,11 @@ function main(){
             }
 
             if(op === "miss") info.slots[slotString(n)] =
-                n.isFront() ? OP_MISS_FRONT : OP_MISS_BACK;
+                (n.isFront() ? OP_MISS_FRONT : OP_MISS_BACK);
             else if(op === "tuck") info.slots[slotString(n)] =
-                n.isFront() ? OP_TUCK_FRONT : OP_TUCK_BACK;
+                (n.isFront() ? OP_TUCK_FRONT : OP_TUCK_BACK);
             else if(op === "knit") info.slots[slotString(n)] =
-                n.isFront() ? OP_KNIT_FRONT : OP_KNIT_BACK;
+                (n.isFront() ? OP_KNIT_FRONT : OP_KNIT_BACK);
             else console.assert(false, "op was miss, tuck, or knit");
 
             handleIn(cs, info);
@@ -1027,25 +1119,25 @@ function main(){
             if(n.isHook && t.isHook()){
                 if(cs.length === 0){
                     type = TYPE_XFER;
-                    op = n.isFront() ? OP_XFER_TO_BACK : OP_XFER_TO_FRONT;
+                    op = (n.isFront() ? OP_XFER_TO_BACK : OP_XFER_TO_FRONT);
                 }else{
                     type = TYPE_SPLIT;
-                    op = n.isFront() ? OP_SPLIT_TO_BACK : OP_SPLIT_TO_FRONT;
+                    op = (n.isFront() ? OP_SPLIT_TO_BACK : OP_SPLIT_TO_FRONT);
                 }
             }else if(n.isSlider() && t.isHook()){
                 if(cs.length === 0) {
                     type = TYPE_XFER_FROM_SLIDERS;
-                    op = n.isFront() ? OP_XFER_TO_BACK : OP_XFER_TO_FRONT;
+                    op = (n.isFront() ? OP_XFER_TO_BACK : OP_XFER_TO_FRONT);
                 }else{
                     throw "ERROR: cannot split from slider.";
                 }
             }else if(n.isHook() && t.isSlider()){
                 if(cs.length === 0) {
                     type = TYPE_XFER_TO_SLIDERS;
-                    op = n.isFront() ? OP_XFER_TO_BACK : OP_XFER_TO_FRONT;
+                    op = (n.isFront() ? OP_XFER_TO_BACK : OP_XFER_TO_FRONT);
                 }else {
                     type = TYPE_SPLIT_VIA_SLIDERS;
-                    op = n.isFront() ? OP_SPLIT_TO_BACK : OP_SPLIT_TO_FRONT;
+                    op = (n.isFront() ? OP_SPLIT_TO_BACK : OP_SPLIT_TO_FRONT);
                 }
             }else{
                 throw "ERROR: cannot move from slider to slider.";
@@ -1096,7 +1188,6 @@ function main(){
 
         for(let s in pass.slots){
             let needle = parseInt(s);
-            let bed = pass.slots[s].isFront ? 'f' : 'b';
             let color = pass.slots[s].color;
             direction = pass.direction;
             if(color !==16) empty = false;
