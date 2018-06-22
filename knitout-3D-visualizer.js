@@ -518,16 +518,20 @@ function tuck(row, direction, bed, needle){
 
     let newLoop = new loop(info);
     if(yarn[row]){
-        yarn[row].loops[needle] = newLoop;
+        if(yarn[row].loops[needle]){
+            yarn[row].loops[needle].push(newLoop);
+        }else{
+            yarn[row].loops[needle] = [newLoop];
+        }
     }else{
         let newRow = [];
-        newRow[needle] = newLoop;
+        newRow[needle] = [newLoop];
         yarn[row] = new yarnPass(newRow, direction);
     }
     if(activeRow[needle])
-        activeRow[needle].push(yarn[row].loops[needle]);
+        activeRow[needle].push(yarn[row].loops[needle][0]);
     else
-        activeRow[needle] = [yarn[row].loops[needle]];
+        activeRow[needle] = yarn[row].loops[needle];
 }
 
 function knit(row, direction, bed, needle){
@@ -599,13 +603,13 @@ function knit(row, direction, bed, needle){
 
     let newLoop = new loop(info);
     if(yarn[row]){
-        yarn[row].loops[needle] = newLoop;
+        yarn[row].loops[needle] = [newLoop];
     }else{
         let newRow = [];
-        newRow[needle] = newLoop;
+        newRow[needle] = [newLoop];
         yarn[row] = new yarnPass(newRow, direction);
     }
-    activeRow[needle] = [yarn[row].loops[needle]];
+    activeRow[needle] = yarn[row].loops[needle];
 }
 
 function xfer(fromSide, fromNeedle, toSide, toNeedle){
@@ -692,9 +696,11 @@ function xfer(fromSide, fromNeedle, toSide, toNeedle){
     if(toActiveRow[toNeedle])
         for(let i = 0; i<info.length; i++)
             toActiveRow[toNeedle].push(info[i]);
-    else
+    else{
         toActiveRow[toNeedle] = info;
-    info = undefined;
+    }
+    info.length = 0;
+    console.log(toActiveRow[toNeedle]);
 
 }
 
@@ -708,10 +714,12 @@ function makeTxt(){
 
             let loop = yarnRow[needle];
             if(loop){
-                let pts = loop.ctrlPts;
-                for(let j = 0; j<pts.length; j++){
-                    let pt = pts[j];
-                    stream.write(format(pt[0], pt[1], pt[2]));
+                for(let i = 0; i<loop.length; i++){
+                    let pts = loop[i].ctrlPts;
+                    for(let j = 0; j<pts.length; j++){
+                        let pt = pts[j];
+                        stream.write(format(pt[0], pt[1], pt[2]));
+                    }
                 }
             }
 
