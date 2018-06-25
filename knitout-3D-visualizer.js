@@ -390,8 +390,6 @@ Pass.prototype.append = function(pass){
 
 //stores points for the entire knitted yarn thing
 let yarn = [];
-//stores index->object of last stitch the needle was active on
-let lastActive = [];
 
 //stores things for each new pass with yarn
 function yarnPass(loops, direction){
@@ -399,11 +397,19 @@ function yarnPass(loops, direction){
     this.direction = direction;
 }
 
-//stores things for each needle with yarn on it
-function loop(info){
-    //ctrlPts: the coordinates of each point on the loop
-    this.ctrlPts = info;
+//stored in array of active loops. Its a row and a needle number used to access
+//the object in the "yarn" array
+function loopSpec(row){
+    this.row = row;
+    this.n = 1;
 }
+
+//stores things for each needle with yarn on it
+function loop(pts){
+    //ctrlPts: the coordinates of each point on the loop
+    this.ctrlPts = pts;
+}
+
 
 function format(x, y, z){
     return x+" "+y+" "+z+"\n";
@@ -420,13 +426,13 @@ function neighborHeight(bed, needle){
     let activeRow = (bed==='f' ? frontActiveRow : backActiveRow);
     while(left>=0||right<activeRow.length){
         if(left>=0){
-            if(activeRow[left]){
-                return minHeight(activeRow[left]);
+            if(activeRow[left] && yarn[activeRow[left].row].loops[left]){
+                return minHeight(activeRow[left], left);
             }else left--;
         }
         if(right<activeRow.length){
-            if(activeRow[right]){
-                return minHeight(activeRow[right]);
+            if(activeRow[right] && yarn[activeRow[right].row].loops[right]){
+                return minHeight(activeRow[right], right);
             }else right++;
         }
     }
@@ -434,10 +440,16 @@ function neighborHeight(bed, needle){
 }
 
 //gets lowest "height" of a stitch on a certain active needle
-function minHeight(needle){
+function minHeight(needleSpec, needle){
+
     let min = Infinity;
-    for(let i = 0; i<needle.length; i++){
-        min = Math.min(min, needle[i].ctrlPts[0][1]);
+    let loops = yarn[needleSpec.row].loops[needle];
+
+    if(!loops){
+        //return 0;
+    }
+    for(let i = 0; i<loops.length; i++){
+        min = Math.min(min, loops[i].ctrlPts[0][1]);
     }
     return min;
 }
@@ -457,7 +469,8 @@ function tuck(row, direction, bed, needle){
 
     let activeRow = (bed==='f' ? frontActiveRow : backActiveRow);
     let height = (activeRow[needle] ?
-            minHeight(activeRow[needle])+boxSpacing : neighborHeight(bed, needle));
+            minHeight(activeRow[needle], needle)+boxSpacing
+            : neighborHeight(bed, needle));
     let start = [needle*boxWidth, height, 0];
 
 
@@ -528,10 +541,13 @@ function tuck(row, direction, bed, needle){
         newRow[needle] = [newLoop];
         yarn[row] = new yarnPass(newRow, direction);
     }
-    if(activeRow[needle])
-        activeRow[needle].push(yarn[row].loops[needle][0]);
-    else
-        activeRow[needle] = yarn[row].loops[needle];
+
+    if(!activeRow[needle]){
+        activeRow[needle] = new loopSpec(row);
+    }else{
+        activeRow[needle].row = [row];
+        activeRow[needle].n++;
+    }
 }
 
 function knit(row, direction, bed, needle){
@@ -542,7 +558,8 @@ function knit(row, direction, bed, needle){
 
     let activeRow = (bed==='f' ? frontActiveRow : backActiveRow);
     let height = (activeRow[needle] ?
-            minHeight(activeRow[needle])+boxSpacing : neighborHeight(bed, needle));
+            minHeight(activeRow[needle], needle)+boxSpacing
+            : neighborHeight(bed, needle));
     let start = [needle*boxWidth, height, 0];
 
 
@@ -603,17 +620,19 @@ function knit(row, direction, bed, needle){
 
     let newLoop = new loop(info);
     if(yarn[row]){
+        console.assert(!yarn[row].loops[needle],
+                "same row same spot shouldn't be able to have two knits");
         yarn[row].loops[needle] = [newLoop];
     }else{
         let newRow = [];
         newRow[needle] = [newLoop];
         yarn[row] = new yarnPass(newRow, direction);
     }
-    activeRow[needle] = yarn[row].loops[needle];
+
+    activeRow[needle] = new loopSpec(row);
 }
 
 function xfer(fromSide, fromNeedle, toSide, toNeedle){
-
     let fromActiveRow = (fromSide==='f' ? frontActiveRow : backActiveRow);
     let toActiveRow = (toSide==='f' ? frontActiveRow : backActiveRow);
     if(!fromActiveRow[fromNeedle]){
@@ -621,13 +640,13 @@ function xfer(fromSide, fromNeedle, toSide, toNeedle){
         return;
     }
 
-    let info = fromActiveRow[fromNeedle];
+    let specs = fromActiveRow[fromNeedle];
+    let info = yarn[specs.row].loops[fromNeedle];
+
     let height = (toActiveRow[toNeedle] ?
-            minHeight(toActiveRow[toNeedle])
+            minHeight(toActiveRow[toNeedle], toNeedle)
             : neighborHeight(toSide, toNeedle));
-    if(!info[0].ctrlPts){
-        console.log(info[0]);
-    }
+
     let dx = (info[0].ctrlPts[1][0]-info[0].ctrlPts[0][0])/2;
     let dy =  boxHeight/3;
     let dz = boxDepth/2;
@@ -693,15 +712,28 @@ function xfer(fromSide, fromNeedle, toSide, toNeedle){
     x += 2*dx;
     z += dz;
 
-    if(toActiveRow[toNeedle])
-        for(let i = 0; i<info.length; i++)
-            toActiveRow[toNeedle].push(info[i]);
-    else{
-        toActiveRow[toNeedle] = info;
+    if(toActiveRow[toNeedle]){
+        toActiveRow[toNeedle].n += fromActiveRow[fromNeedle].n;
+    }else{
+        toActiveRow[toNeedle] = new loopSpec(fromActiveRow[fromNeedle].row);
+        toActiveRow[toNeedle].n = fromActiveRow[fromNeedle].n;
     }
-    info.length = 0;
-    console.log(toActiveRow[toNeedle]);
 
+    let xferred = yarn[fromActiveRow[fromNeedle].row].loops[fromNeedle];
+    let destination;
+    if(fromNeedle!=toNeedle){
+        for(let i = 0; i<xferred.length; i++){
+            let newLoop = new loop(xferred[i].ctrlPts.slice());
+            destination = yarn[toActiveRow[toNeedle].row].loops[toNeedle];
+            if(destination){
+                yarn[toActiveRow[toNeedle].row].loops[toNeedle].push(newLoop);
+            }else{
+                yarn[toActiveRow[toNeedle].row].loops[toNeedle] = [newLoop];
+            }
+        }
+        yarn[fromActiveRow[fromNeedle].row].loops[fromNeedle] = undefined;
+    }
+    fromActiveRow[fromNeedle] = undefined;
 }
 
 function makeTxt(){

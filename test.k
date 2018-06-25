@@ -67,5 +67,7 @@ knit + b56 6
 knit + b58 6
 knit + b60 6
 xfer f59 b59
-rack -2
-
+rack 2
+xfer b59 f61
+rack 0
+knit + f61 6
