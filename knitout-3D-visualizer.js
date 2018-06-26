@@ -18,6 +18,15 @@ if (process.argv.length != 4) {
 }
 
 //globals
+
+//layer depths
+const FRONT_BED = 1;
+const BACK_BED = -1;
+const CARRIERS = 0;
+const FRONT_SLIDERS = 0.5;
+const BACK_SLIDERS = -0.5;
+
+
 var knitoutFile = process.argv[2];
 var textFile = process.argv[3];
 const fs = require("fs");
@@ -30,13 +39,7 @@ var boxWidth = 1;
 var boxHeight = 1;
 var boxDepth = 0.1;
 var boxSpacing = boxHeight/2;
-
-//layer depths
-const FRONT_BED = 1;
-const BACK_BED = -1;
-const CARRIERS = 0;
-const FRONT_SLIDERs = 0.5;
-const BACK_SLIDERS = -0.5;
+var carrierSpacing = (FRONT_SLIDERS-CARRIERS)/16;
 
 //different pass types:
 const TYPE_KNIT_TUCK = 'knit-tuck';
@@ -1256,7 +1259,6 @@ function main(){
     passes.forEach(function(pass){
         let direction;
         let empty = true; //pass is all soft misses
-
         for(let s in pass.slots){
             let needle = parseInt(s);
             let color = pass.slots[s].color;
@@ -1284,14 +1286,55 @@ function main(){
                 console.log(color+": not yet implemented");
             }
         }
-        if (pass.type === TYPE_KNIT_TUCK != empty){
+        if (pass.type === TYPE_KNIT_TUCK && !empty){
             row++;
         }
     });
 
     makeTxt();
 
+    let lastPass = passes[passes.length-1];
+    lastPass.carriers.forEach(function(c){
+        if(c in carriers){
+            let lastNeedle = parseInt(carriers[c].last.needle.needle);
+            let bed = carriers[c].last.needle.bed;
+            let activeRow = (bed==='f' ? frontActiveRow : backActiveRow);
+
+            let height = (activeRow[lastNeedle] ?
+                minHeight(activeRow[lastNeedle], bed, lastNeedle)+boxSpacing
+                : neighborHeight(bed, lastNeedle));
+
+            if(lastPass.direction == '+') lastNeedle += 2;
+            else lastNeedle -= 2;
+
+            //yarn going to the carrier
+            let xstart = lastNeedle*boxWidth;
+            let dx = boxWidth/6;
+            let dy = boxHeight/4;
+            let start = [xstart, height,CARRIERS+carrierSpacing*c];
+            stream.write(format(start[0], start[1], start[2]));
+
+            start[0]-=dx;
+            start[1]+=dy;
+            stream.write(format(start[0], start[1], start[2]));
+
+            start[0]+=2*dx;
+            stream.write(format(start[0], start[1], start[2]));
+
+            //carrier
+            xstart = lastNeedle*boxWidth;
+            start = [xstart, height,CARRIERS+carrierSpacing*c];
+            stream.write("c "+format(start[0], start[1], start[2]));
+
+            start[0]-=dx;
+            start[1]+=dy;
+            stream.write("c "+format(start[0], start[1], start[2]));
+
+            start[0]+=2*dx;
+            stream.write("c "+format(start[0], start[1], start[2]));
+        }
+    });
+
 }
 
-//tests();
 main();

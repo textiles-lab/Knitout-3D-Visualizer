@@ -21,7 +21,7 @@ let objFile = process.argv[3];
 const fs = require('fs');
 //------------------------------------
 function numberize(strings){
-    for(var i = 0; i<strings.length; i++){
+    for(let i = 0; i<strings.length; i++){
         strings[i] = parseFloat(strings[i].trim());
     }
     return strings;
@@ -29,28 +29,53 @@ function numberize(strings){
 
 function main(){
     //creating objFile
-    var buffer = '';
-    var points = fs.readFileSync(inputFile, 'utf8').trim().split('\n');
+    let buffer = '';
+    let carriers = [];
+
+    let points = fs.readFileSync(inputFile, 'utf8').trim().split('\n');
+    let yarnPoints = 0;
+
+    //sets up different colors for carriers
+    for(let i = 1; i<=16; i++){
+        buffer+= 'newmtl mtl'+i+'\n';
+        buffer+= 'Kd '+Math.random()+' '+Math.random()+' '+Math.random()+'\n';
+    }
+
     //adds each coordinate
-    for(var i = 0; i<points.length; i++){
-       buffer+= 'v '+points[i]+'\n';
+    for(let i = 0; i<points.length; i++){
+        if('c'!= points[i][0]){
+            buffer+= 'v '+points[i]+'\n';
+            yarnPoints++;
+        }else{
+            let sliced = points[i].slice(2);
+            carriers.push(sliced);
+        }
     }
     //adds each coordinate but slightly offset
-    var offset = 0.01;
-    for(var i = points.length-1; i>=0; i--){
-        var comp = numberize(points[i].split(' '));
-        var x = comp[0]+offset;
-        var y = comp[1]+offset;
-        var z = comp[2]+offset;
+    let offset = 0.01;
+    for(let i = yarnPoints-1; i>=0; i--){
+        let comp = numberize(points[i].split(' '));
+        let x = comp[0]+offset;
+        let y = comp[1]+offset;
+        let z = comp[2]+offset;
         buffer+= 'v '+x+' '+y+' '+z+' '+'\n';
     }
 
-    //connect the dots
-    for(var i = 1; i<points.length; i++){
-        buffer+= 'f '+i+' '+(i+1)+' '
-            +(2*points.length-i)+' '+(2*points.length-i+1)+'\n';
+    //add carrier coordinates
+    for(let i = 0; i<carriers.length; i++){
+        buffer+= 'v '+carriers[i]+'\n';
     }
 
+    //connect the dots
+    for(let i = 1; i<yarnPoints; i++){
+        buffer+= 'f '+i+' '+(i+1)+' '
+            +(2*yarnPoints-i)+' '+(2*yarnPoints-i+1)+'\n';
+    }
+    //draw triangles
+    for(let i = 0; i<carriers.length; i+=3){
+        let index = i+2*yarnPoints+1;
+        buffer+='f '+index+' '+(index+1)+' '+(index+2)+'\n';
+    }
     fs.writeFileSync(objFile, buffer);
 }
 
