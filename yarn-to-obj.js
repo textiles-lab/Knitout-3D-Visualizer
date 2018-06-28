@@ -31,6 +31,8 @@ function main(){
     //creating objFile
     let buffer = '';
     let carriers = [];
+    let carrierChange = [];
+    let carrierChangeTarget = [];
 
     let points = fs.readFileSync(inputFile, 'utf8').trim().split('\n');
     let yarnPoints = 0;
@@ -43,22 +45,26 @@ function main(){
 
     //adds each coordinate
     for(let i = 0; i<points.length; i++){
-        if('c'!= points[i][0]){
+        if(points[i][0] == parseInt(points[i][0])){
             buffer+= 'v '+points[i]+'\n';
             yarnPoints++;
-        }else{
+        }else if('c' === points[i][0]){
             let sliced = points[i].slice(2);
             carriers.push(sliced);
+        }else if('u' === points[i][0]){
+            carrierChange[yarnPoints] = points[i];
         }
     }
     //adds each coordinate but slightly offset
     let offset = 0.01;
-    for(let i = yarnPoints-1; i>=0; i--){
-        let comp = numberize(points[i].split(' '));
-        let x = comp[0]+offset;
-        let y = comp[1]+offset;
-        let z = comp[2]+offset;
-        buffer+= 'v '+x+' '+y+' '+z+' '+'\n';
+    for(let i = points.length-1; i>=0; i--){
+        if(points[i][0] == parseInt(points[i][0])){
+            let comp = numberize(points[i].split(' '));
+            let x = comp[0]+offset;
+            let y = comp[1]+offset;
+            let z = comp[2]+offset;
+            buffer+= 'v '+x+' '+y+' '+z+' '+'\n';
+        }
     }
 
     //add carrier coordinates
@@ -68,6 +74,8 @@ function main(){
 
     //connect the dots
     for(let i = 1; i<yarnPoints; i++){
+        if(carrierChange[i-1])
+            buffer+=carrierChange[i-1] +'\n';
         buffer+= 'f '+i+' '+(i+1)+' '
             +(2*yarnPoints-i)+' '+(2*yarnPoints-i+1)+'\n';
     }

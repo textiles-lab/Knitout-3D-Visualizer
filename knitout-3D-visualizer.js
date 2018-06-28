@@ -383,9 +383,10 @@ function loopSpec(row){
 }
 
 //stores things for each needle with yarn on it
-function loop(pts){
+function loop(pts, carrier){
     //ctrlPts: the coordinates of each point on the loop
     this.ctrlPts = pts;
+    this.carrier = carrier;
 }
 
 
@@ -444,7 +445,7 @@ function minHeight(needleSpec, bed, needle){
  *  -bed: the needle bed
  */
 
-function tuck(row, direction, bed, needle){
+function tuck(row, direction, bed, needle, carrier){
     let info = [];
     let dx = boxWidth/5;
     let dy =  boxHeight/3;
@@ -512,7 +513,7 @@ function tuck(row, direction, bed, needle){
     z += dz;
     info.push([x, y, z]);
 
-    let newLoop = new loop(info);
+    let newLoop = new loop(info, carrier);
     if(yarn[row]){
         let yarnLoops = (bed==='f' ? yarn[row].floops : yarn[row].bloops);
         if(yarnLoops[needle]){
@@ -538,7 +539,7 @@ function tuck(row, direction, bed, needle){
     }
 }
 
-function knit(row, direction, bed, needle){
+function knit(row, direction, bed, needle, carrier){
     let info = [];
     let dx = boxWidth/5;
     let dy =  boxHeight/3;
@@ -606,7 +607,7 @@ function knit(row, direction, bed, needle){
     z += dz;
     info.push([x, y, z]);
 
-    let newLoop = new loop(info);
+    let newLoop = new loop(info, carrier);
     if(yarn[row]){
         let yarnLoops = (bed==='f' ? yarn[row].floops : yarn[row].bloops);
         console.assert(!yarnLoops[needle],
@@ -716,7 +717,7 @@ function xfer(fromSide, fromNeedle, toSide, toNeedle){
     let destination = (toSide==='f' ? destRow.floops[toNeedle]
             : destRow.bloops[toNeedle]);
     for(let i = 0; i<info.length; i++){
-        let newLoop = new loop(info[i].ctrlPts.slice());
+        let newLoop = new loop(info[i].ctrlPts.slice(), info[i].carrier);
         if(destination){
             if(toSide==='f')
                 destRow.floops[toNeedle].push(newLoop);
@@ -734,6 +735,7 @@ function xfer(fromSide, fromNeedle, toSide, toNeedle){
 }
 
 function makeTxt(){
+    let mostRecentC;
     for(let row = 0; row<yarn.length; row++){
         let dir = yarn[row].direction;
         let yarnRow = yarn[row];
@@ -746,6 +748,12 @@ function makeTxt(){
             if(loop){
                 for(let i = 0; i<loop.length; i++){
                     let pts = loop[i].ctrlPts;
+                    let carrier = loop[i].carrier;
+                    if(carrier!=mostRecentC){
+                    console.log(carrier);
+                        stream.write("usemtl mtl"+carrier+"\n");
+                        mostRecentC = carrier;
+                    }
                     for(let j = 0; j<pts.length; j++){
                         let pt = pts[j];
                         stream.write(format(pt[0], pt[1], pt[2]));
@@ -756,6 +764,11 @@ function makeTxt(){
             if(loop){
                 for(let i = 0; i<loop.length; i++){
                     let pts = loop[i].ctrlPts;
+                    let carrier = loop[i].carrier;
+                    if(carrier!=mostRecentC){
+                        stream.write("usemtl mtl"+carrier+"\n");
+                        mostRecentC = carrier;
+                    }
                     for(let j = 0; j<pts.length; j++){
                         let pt = pts[j];
                         stream.write(format(pt[0], pt[1], pt[2]));
@@ -1110,7 +1123,7 @@ function main(){
             }
 
             let type;
-            if(op === 'miss' && cs.length === 0){
+            if(op === "miss" && cs.length === 0){
                 type = TYPE_A_MISS;
             }else{
                 type = TYPE_KNIT_TUCK;
@@ -1121,10 +1134,8 @@ function main(){
                 slots:{},
                 racking:racking,
                 stitch:stitch,
-                //speed:speed, (currently does nothing)
                 carriers:cs,
                 direction:d
-                    //presserMode:presserMode (also does nothing bc idk what it is)
             }
 
             if(op === "miss") info.slots[slotString(n)] =
@@ -1135,6 +1146,7 @@ function main(){
                 (n.isFront() ? OP_KNIT_FRONT : OP_KNIT_BACK);
             else console.assert(false, "op was miss, tuck, or knit");
 
+            info.slots[slotString(n)].carrier = cs[0];
             handleIn(cs, info);
             merge(new Pass(info));
             setLast(cs, d, n);
@@ -1241,18 +1253,19 @@ function main(){
         for(let s in pass.slots){
             let needle = parseInt(s);
             let color = pass.slots[s].color;
+            let carrier = pass.slots[s].carrier;
             direction = pass.direction;
             if(color !==16) empty = false;
 
-            if(color == 11)
-                tuck(row, direction, 'f', needle);
-            else if(color == 12)
-                tuck(row, direction, 'b', needle);
-            else if(color == 51)
-                knit(row, direction, 'f', needle);
-            else if(color == 52)
-                knit(row, direction, 'b', needle);
-            else if(color == 30){
+            if(color == 11){
+                tuck(row, direction, 'f', needle, carrier);
+            }else if(color == 12){
+                tuck(row, direction, 'b', needle, carrier);
+            }else if(color == 51){
+                knit(row, direction, 'f', needle, carrier);
+            }else if(color == 52){
+                knit(row, direction, 'b', needle, carrier);
+            }else if(color == 30){
                 //xfer back to front
                 xfer('b', needle-pass.racking, 'f', needle);
             }else if(color == 20){
