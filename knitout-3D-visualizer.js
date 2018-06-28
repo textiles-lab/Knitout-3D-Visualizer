@@ -103,15 +103,6 @@ const OP_TUCK_BACK	= {color:12, isBack:true /*bed:'b'*/};
 const OP_KNIT_FRONT = {color:51, isFront:true /*bed:'f'*/};
 const OP_KNIT_BACK	= {color:52, isBack:true /*bed:'b'*/};
 //combo ops:
-const OP_KNIT_FRONT_KNIT_BACK = {color:3, isFront:true, isBack:true};
-const OP_KNIT_FRONT_TUCK_BACK = {color:41, isFront:true, isBack:true};
-const OP_KNIT_FRONT_MISS_BACK = {color:OP_KNIT_FRONT.color, isFront:true};
-const OP_TUCK_FRONT_KNIT_BACK = {color:42, isFront:true, isBack:true};
-const OP_TUCK_FRONT_TUCK_BACK = {color:88, isFront:true, isBack:true};
-const OP_TUCK_FRONT_MISS_BACK = {color:OP_TUCK_FRONT.color, isFront:true};
-const OP_MISS_FRONT_KNIT_BACK = {color:OP_KNIT_BACK.color, isBack:true};
-const OP_MISS_FRONT_TUCK_BACK = {color:OP_TUCK_BACK.color, isBack:true};
-const OP_MISS_FRONT_MISS_BACK = {color:16};
 const OP_XFER_TO_BACK = {color:20};
 const OP_XFER_TO_FRONT = {color:30};
 const OP_SPLIT_TO_BACK = {color:101};
@@ -125,23 +116,6 @@ function merge_ops(a,b,quarterPitch){
         return b;
     else if(b===OP_SOFT_MISS)
         return a;
-    //see if a/b fit one of the combo ops:
-    if (!quarterPitch) return null;
-    //can't merge front/back ops without quarter pitch racking
-    if (a === OP_MISS_FRONT) {
-        if      (b === OP_MISS_BACK) return OP_MISS_FRONT_MISS_BACK;
-        else if (b === OP_TUCK_BACK) return OP_MISS_FRONT_TUCK_BACK;
-        else if (b === OP_KNIT_BACK) return OP_MISS_FRONT_KNIT_BACK;
-    } else if (a === OP_TUCK_FRONT) {
-        if      (b === OP_MISS_BACK) return OP_TUCK_FRONT_MISS_BACK;
-        else if (b === OP_TUCK_BACK) return OP_TUCK_FRONT_TUCK_BACK;
-        else if (b === OP_KNIT_BACK) return OP_TUCK_FRONT_KNIT_BACK;
-    } else if (a === OP_KNIT_FRONT) {
-        if      (b === OP_MISS_BACK) return OP_KNIT_FRONT_MISS_BACK;
-        else if (b === OP_TUCK_BACK) return OP_KNIT_FRONT_TUCK_BACK;
-        else if (b === OP_KNIT_BACK) return OP_KNIT_FRONT_KNIT_BACK;
-    }
-    //I guess they can't be combined:
     return null;
 }
 
@@ -837,6 +811,11 @@ function main(){
         }
     }
 
+    /*
+     * currently it seems like the visualizer is fine without merging and just
+     * pushing the new pass onto passes. Haven't tested enough to feel safe just
+     * removing all calls to merge though.
+     */
     function merge(pass, shouldNotKick) {
         if(passes.length !== 0 && passes[passes.length-1].append(pass)){
             //merged fine
