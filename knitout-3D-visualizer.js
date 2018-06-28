@@ -750,7 +750,6 @@ function makeTxt(){
                     let pts = loop[i].ctrlPts;
                     let carrier = loop[i].carrier;
                     if(carrier!=mostRecentC){
-                    console.log(carrier);
                         stream.write("usemtl mtl"+carrier+"\n");
                         mostRecentC = carrier;
                     }
@@ -1140,11 +1139,19 @@ function main(){
 
             if(op === "miss") info.slots[slotString(n)] =
                 (n.isFront() ? OP_MISS_FRONT : OP_MISS_BACK);
-            else if(op === "tuck") info.slots[slotString(n)] =
-                (n.isFront() ? OP_TUCK_FRONT : OP_TUCK_BACK);
-            else if(op === "knit") info.slots[slotString(n)] =
-                (n.isFront() ? OP_KNIT_FRONT : OP_KNIT_BACK);
-            else console.assert(false, "op was miss, tuck, or knit");
+            else if(op === "tuck"){
+                if(n.isFront()){
+                    info.slots[slotString(n)] = {color: 11, isFront: true};
+                }else{
+                    info.slots[slotString(n)] = {color:12, isBack:true};
+                }
+            }else if(op === "knit"){
+                 if(n.isFront()){
+                    info.slots[slotString(n)] = {color: 51, isFront: true};
+                }else{
+                    info.slots[slotString(n)] = {color:52, isBack:true};
+                }
+            }else console.assert(false, "op was miss, tuck, or knit");
 
             info.slots[slotString(n)].carrier = cs[0];
             handleIn(cs, info);
