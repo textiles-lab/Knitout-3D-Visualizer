@@ -20,7 +20,7 @@ if (process.argv.length != 4) {
 //globals
 var knitoutFile = process.argv[2];
 var textFile = process.argv[3];
-const fs = require("fs");
+const fs = require('fs');
 var stream = fs.createWriteStream(textFile);
 var frontActiveRow = [];
 var backActiveRow = [];
@@ -30,7 +30,6 @@ var boxWidth = 1;
 var boxHeight = 1;
 var boxDepth = 0.1;
 var boxSpacing = boxHeight/2;
-var carrierSpacing = (FRONT_SLIDERS-CARRIERS)/16;
 
 //layer depths
 const FRONT_STITCHES = 1.1;
@@ -41,6 +40,8 @@ const CARRIERS = 0;
 const FRONT_SLIDERS = 0.5;
 const BACK_SLIDERS = -0.5;
 const CROSSING = boxWidth/3;
+const PADDING = boxWidth/10;
+const CARRIER_SPACING = (FRONT_SLIDERS-CARRIERS)/16;
 
 //different pass types:
 const TYPE_KNIT_TUCK = 'knit-tuck';
@@ -145,26 +146,26 @@ BedNeedle.prototype.toString = function() {
 };
 
 BedNeedle.prototype.isFront = function(){
-    if (this.bed === "f" || this.bed === "fs") return true;
-    else if (this.bed === "b" || this.bed === "bs") return false;
+    if (this.bed === 'f' || this.bed === 'fs') return true;
+    else if (this.bed === 'b' || this.bed === 'bs') return false;
     else throw "Invalid bed in BedNeedle.";
 };
 
 BedNeedle.prototype.isBack = function(){
-    if (this.bed === "f" || this.bed === "fs") return false;
-    else if (this.bed === "b" || this.bed === "bs") return true;
+    if (this.bed === 'f' || this.bed === 'fs') return false;
+    else if (this.bed === 'b' || this.bed === 'bs') return true;
     else throw "Invalid bed in BedNeedle.";
 };
 
 BedNeedle.prototype.isHook = function(){
-    if (this.bed === "f" || this.bed === "b") return true;
-    else if (this.bed === "fs" || this.bed === "bs") return false;
+    if (this.bed === 'f' || this.bed === 'b') return true;
+    else if (this.bed === 'fs' || this.bed === 'bs') return false;
     else throw "Invalid bed in BedNeedle.";
 };
 
 BedNeedle.prototype.isSlider = function(){
-    if (this.bed === "fs" || this.bed === "bs") return true;
-    else if (this.bed === "f" || this.bed === "b") return false;
+    if (this.bed === 'fs' || this.bed === 'bs') return true;
+    else if (this.bed === 'f' || this.bed === 'b') return false;
     else throw "Invalid bed in BedNeedle.";
 };
 
@@ -196,20 +197,20 @@ function Pass(info){
     console.assert('stitch' in this, "Can't specify a pass without a stitch value.");
 
     if(this.type === TYPE_KNIT_TUCK){
-        if("gripper" in this){
+        if('gripper' in this){
             console.assert(this.carriers.length!==0,
                     "Using GRIPPER_* with no carriers doesn't make sense.");
             if(this.gripper === GRIPPER_IN)
-                console.assert(!("hook" in this) || this.hook===HOOK_IN,
+                console.assert(!('hook' in this) || this.hook===HOOK_IN,
                         "Must use GRIPPER_IN with HOOK_IN.");
             else if(this.gripper === GRIPPER_OUT)
-                console.assert(!("hook" in this) || this.hook===HOOK_OUT,
+                console.assert(!('hook' in this) || this.hook===HOOK_OUT,
                         "Must use GRIPPER_OUT with HOOK_OUT.");
             else
                 console.assert(false,
                         "Pass gripper must be one of the GRIPPER_* constants.");
         }
-        if("hook" in this){
+        if('hook' in this){
             if(this.hook === HOOK_IN){
                 console.assert(this.carriers.length!==0,
                         "Using HOOK_IN with no carriers doesn't make sense.");
@@ -224,17 +225,17 @@ function Pass(info){
             }
         }
     }else if(this.type === TYPE_SPLIT) {
-        console.assert(!("gripper" in this),
+        console.assert(!('gripper' in this),
                 "Must use gripper enly on KNIT_TUCK pass.");
-        console.assert(!("hook" in this),
+        console.assert(!('hook' in this),
                 "Must use hook only on KNIT_TUCK pass.");
         console.assert(this.carrers.length>0,
                 "Split passes should have yarn.");
     }else if(this.type === TYPE_XFER || this.type === TYPE_XFER_TOSLIDERS
             || this.type === TYPE_XFER_FROM_SLIDERS){
-        console.assert(!("gripper" in this),
+        console.assert(!('gripper' in this),
                 "Must use gripper only on KNIT_TUCK pass.");
-        console.assert(!("hook" in this),
+        console.assert(!('hook' in this),
                 "Must use gripper only on KNIT_TUCK pass.");
         console.assert(this.carriers.length === 0,
                 "Transfer passes cannot have carriers specified.");
@@ -246,7 +247,7 @@ Pass.prototype.hasFront = function(){
     console.assert(this.type === TYPE_KNIT_TUCK,
             "It only makes sense for knit-tuck passes to have front stitches.");
     for(let s in this.slots){
-        if("isFront" in this.slots[s]) return true;
+        if('isFront' in this.slots[s]) return true;
     }
     return false;
 };
@@ -254,33 +255,33 @@ Pass.prototype.hasBack = function(){
     console.assert(this.type === TYPE_KNIT_TUCK,
             "It only makes sense for knit-tuck passes to have back stitches.");
     for(let s in this.slots){
-        if("isBack" in this.slots[s]) return true;
+        if('isBack' in this.slots[s]) return true;
     }
     return false;
 };
 Pass.prototype.append = function(pass){
-    if(!["type", "racking", "stitch", "direction", "carriers"].every(function(name){
+    if(!['type', 'racking', 'stitch', 'direction', 'carriers'].every(function(name){
         return JSON.stringify(this[name])===JSON.stringify(pass[name]);
     }, this)){
         return false;
     }
 
-    if(!("hook" in this) && !("hook" in pass)){
+    if(!('hook' in this) && !('hook' in pass)){
         //hook in neither is fine
-    }else if(this.hook === HOOK_IN && !("hook" in pass)){
+    }else if(this.hook === HOOK_IN && !('hook' in pass)){
         //in at start of current pass is fine
-    }else if(!("hook" in this) &&
+    }else if(!('hook' in this) &&
             (pass.hook === HOOK_OUT||pass.hook===HOOK_RELEASE)){
         //out or release at the end of the next pass is fine
     }else{
         return false;
     }
 
-    if(!("gripper" in this) && !("gripper" in pass)){
+    if(!('gripper' in this) && !('gripper' in pass)){
         //gripper in neither is fine
-    }else if(this.gripper === GRIPPER_IN && !("gripper" in pass)){
+    }else if(this.gripper === GRIPPER_IN && !('gripper' in pass)){
         //in at the start of the current pass is fien
-    }else if(!("gripper" in this) && pass.gripper === GRIPPER_OUT){
+    }else if(!('gripper' in this) && pass.gripper === GRIPPER_OUT){
         //out at the end of the next pass is fine
     }else{
         return false;
@@ -333,14 +334,14 @@ Pass.prototype.append = function(pass){
         }
     }
     //merge hook and gripper properties
-    if(!("hook" in this) && ("hook" in pass))
+    if(!('hook' in this) && ('hook' in pass))
         this.hook = pass.hook;
     else
-        console.assert(!("hook" in pass), "we checked this");
-    if(!("gripper" in this) && ("gripper" in pass))
+        console.assert(!('hook' in pass), "we checked this");
+    if(!('gripper' in this) && ('gripper' in pass))
         this.gripper = pass.gripper;
     else
-        console.assert(!("gripper" in pass), "we checked this");
+        console.assert(!('gripper' in pass), "we checked this");
 
     //merge slots
     for(let s in pass.slots){
@@ -448,21 +449,23 @@ function minHeight(needleSpec, bed, needle){
 
 function tuck(row, direction, bed, needle, carrier){
     let info = [];
-    let dx = boxWidth/5;
+    let width = boxWidth-PADDING*2;
+    let dx = width/5;
     let dy =  boxHeight/3;
     let dz = boxDepth/2;
+    let padding = (direction==='-' ? -PADDING : PADDING);
 
     let activeRow = (bed==='f' ? frontActiveRow : backActiveRow);
     let height = (activeRow[needle] ?
             minHeight(activeRow[needle], bed, needle)+boxSpacing
             : neighborHeight(bed, needle));
-    let start = [needle*boxWidth, height, 0];
+    let start = [needle*(boxWidth+boxSpacing), height, 0];
 
 
-    if(direction == "-") dx*= -1;
+    if(direction === '-') dx*= -1;
     else start[0] -= boxWidth;
 
-    if(bed=="b"){
+    if(bed==='b'){
         dz*=-1;
         start[2] = BACK_BED;
     }else{
@@ -473,6 +476,12 @@ function tuck(row, direction, bed, needle, carrier){
     let y = start[1];
     let z = start[2];
 
+    info.push([x, y, z]);
+
+    z = (bed==='b' ? BACK_STITCHES : FRONT_STITCHES);
+    info.push([x, y, z]);
+
+    x += padding;
     info.push([x, y, z]);
 
     x += 2*dx;
@@ -512,6 +521,15 @@ function tuck(row, direction, bed, needle, carrier){
 
     x += 2*dx;
     z += dz;
+    info.push([x, y, z]);
+
+    x += padding;
+    info.push([x, y, z]);
+
+    z = (bed==='f' ? FRONT_BED : BACK_BED);
+    info.push([x, y, z]);
+
+    x+= (direction==='-' ? -boxSpacing : boxSpacing);
     info.push([x, y, z]);
 
     let newLoop = new loop(info, carrier);
@@ -542,21 +560,23 @@ function tuck(row, direction, bed, needle, carrier){
 
 function knit(row, direction, bed, needle, carrier){
     let info = [];
-    let dx = boxWidth/5;
+    let width = boxWidth-PADDING*2;
+    let dx = width/5;
     let dy =  boxHeight/3;
     let dz = boxDepth/2;
+    let padding = (direction==='-' ? -PADDING : PADDING);
 
     let activeRow = (bed==='f' ? frontActiveRow : backActiveRow);
     let height = (activeRow[needle] ?
             minHeight(activeRow[needle], bed, needle)+boxSpacing
             : neighborHeight(bed, needle));
-    let start = [needle*boxWidth, height, 0];
+    let start = [needle*(boxWidth+boxSpacing), height, 0];
 
 
-    if(direction == "-") dx*= -1;
+    if(direction === '-') dx*= -1;
     else start[0] -= boxWidth;
 
-    if(bed=="b"){
+    if(bed==='b'){
         dz*=-1;
         start[2] = BACK_BED;
     }else{
@@ -567,6 +587,12 @@ function knit(row, direction, bed, needle, carrier){
     let y = start[1];
     let z = start[2];
 
+    info.push([x, y, z]);
+
+    z = (bed==='b' ? BACK_STITCHES : FRONT_STITCHES);
+    info.push([x, y, z]);
+
+    x += padding;
     info.push([x, y, z]);
 
     x += 2*dx;
@@ -606,6 +632,15 @@ function knit(row, direction, bed, needle, carrier){
 
     x += 2*dx;
     z += dz;
+    info.push([x, y, z]);
+
+    x += padding;
+    info.push([x, y, z]);
+
+    z = (bed==='f' ? FRONT_BED : BACK_BED);
+    info.push([x, y, z]);
+
+    x+= (direction==='-' ? -boxSpacing : boxSpacing);
     info.push([x, y, z]);
 
     let newLoop = new loop(info, carrier);
@@ -645,12 +680,12 @@ function xfer(fromSide, fromNeedle, toSide, toNeedle){
     let dx = (info[0].ctrlPts[1][0]-info[0].ctrlPts[0][0])/2;
     let dy =  boxHeight/3;
     let dz = boxDepth/2;
-    let dir = (dx<0 ? "-" : "+");
+    let dir = (dx<0 ? '-' : '+');
     let start = [toNeedle*boxWidth, height, 0];
 
     if(dir === '+') start[0]-=boxWidth;
 
-    if(toSide == "b"){
+    if(toSide === 'b'){
         dz*=-1;
         start[2] = BACK_BED;
     }else{
@@ -725,7 +760,7 @@ function xfer(fromSide, fromNeedle, toSide, toNeedle){
             else
                 destRow.bloops[toNeedle].push(newLoop);
         }else{
-            if(toSide=='f')
+            if(toSide==='f')
                 destRow.floops[toNeedle] = [newLoop];
             else
                 destRow.bloops[toNeedle] = [newLoop];
@@ -743,7 +778,7 @@ function makeTxt(){
         let maxNeedle = Math.max(yarnRow.floops.length, yarnRow.bloops.length);
         for(let col = 0; col<maxNeedle; col++){
             let needle = col;
-            if(dir == '-') needle = maxNeedle-col-1;
+            if(dir === '-') needle = maxNeedle-col-1;
 
             let loop = yarnRow.floops[needle];
             if(loop){
@@ -809,9 +844,9 @@ function main(){
             if(JSON.stringify(inInfo.cs) !== JSON.stringify(cs))
                 throw "first use of carriers "+JSON.stringify(cs)
                     +" doesn't match in info " +JSON.stringify(inInfo);
-            if(inInfo.op === "in"){
+            if(inInfo.op === 'in'){
                 info.gripper = GRIPPER_IN;
-            }else if(inInfo.op === "inhook"){
+            }else if(inInfo.op === 'inhook'){
                 info.gripper = GRIPPER_IN;
                 info.hook = HOOK_IN;
                 if(hook !== null)
@@ -838,11 +873,11 @@ function main(){
             //which slot is this pass acting on?
             let passSlot;
             for(let s in pass.slots){
-                console.assert(typeof(passSlot)==="undefined",
+                console.assert(typeof(passSlot)==='undefined',
                         "only one slot in pass to merge");
                 passSlot = parseInt(s);
             }
-            console.assert(typeof(passSlot)!=="undefined",
+            console.assert(typeof(passSlot)!=='undefined',
                     "only one slot in pass to merge");
             //which carriers are on the wrong side of this slot?
             let slotCs = {};
@@ -973,7 +1008,7 @@ function main(){
         }
     }
 
-    let lines = fs.readFileSync(knitoutFile, "utf8").split("\n");
+    let lines = fs.readFileSync(knitoutFile, 'utf8').split("\n");
     (function checkVersion(){
         let m = lines[0].match(/^;!knitout-(\d+)$/);
         if(!m)
@@ -989,7 +1024,7 @@ function main(){
     let stitch = 5; //machine-specific stitch number
 
     lines.forEach(function(line, lineIdx){
-        let i = line.indexOf(";");
+        let i = line.indexOf(';');
         if(i>=0) line = line.substr(0,i);
         let tokens = line.split(/[ ]+/);
 
@@ -1002,18 +1037,18 @@ function main(){
         let args = tokens;
 
         //handle synonyms
-        if(op === "amiss"){
-            op = "tuck";
-            args.unshift("+");
-        }else if(op === "drop"){
-            op = "knit";
-            args.unshift("+");
-        }else if(op === "xfer"){
-            op = "split";
-            args.unshift("+");
+        if(op === 'amiss'){
+            op = 'tuck';
+            args.unshift('+');
+        }else if(op === 'drop'){
+            op = 'knit';
+            args.unshift('+');
+        }else if(op === 'xfer'){
+            op = 'split';
+            args.unshift('+');
         }
 
-        if(op === "in" || op === "inhook"){
+        if(op === 'in' || op === 'inhook'){
             let cs = args;
             if(cs.length === 0)
                 throw "ERROR: Can't bring in no carriers.";
@@ -1030,7 +1065,7 @@ function main(){
                 carrier.in = inInfo;
                 carriers[c] = carrier;
             });
-        }else if(op === "releasehook"){
+        }else if(op === 'releasehook'){
             let cs = args;
             if(hook === null){
                 throw "ERROR: Can't releasehook on "+cs+", it's empty.";
@@ -1041,7 +1076,7 @@ function main(){
             let needPass = true;
             if(passes.length>0){
                 let prev = passes[passes.length-1];
-                if(prev.type === TYPE_KNIT_TUCK && !("hook" in prev)
+                if(prev.type === TYPE_KNIT_TUCK && !('hook' in prev)
                         &&prev.direction === hook.direction){
                     prev.hook = HOOK_RELEASE;
                     needPass = false;
@@ -1064,7 +1099,7 @@ function main(){
             }
             //hook is now empty
             hook = null;
-        }else if (op === "out" || op === "outhook"){
+        }else if (op === 'out' || op === 'outhook'){
             let cs = args;
             cs.forEach(function(c){
                 if(!(c in carriers))
@@ -1075,7 +1110,7 @@ function main(){
                 }
             });
 
-            if(op === "outhook" && hook !==null)
+            if(op === 'outhook' && hook !==null)
                 throw "ERROR: Can't outhook carriers "+cs+", hook is holding "
                     +hook+".";
             let s = -Infinity;
@@ -1098,7 +1133,7 @@ function main(){
             };
             info.slots[slotString(n)] = OP_SOFT_MISS;
 
-            if(op === "outhook") info.hook = HOOK_OUT;
+            if(op === 'outhook') info.hook = HOOK_OUT;
             merge(new Pass(info));
 
             //remove carriers from active set:
@@ -1106,24 +1141,24 @@ function main(){
                 delete carriers[c];
             });
 
-        }else if(op === "tuck"|| op === "knit"){
+        }else if(op === 'tuck'|| op === 'knit'){
             let d = args.shift();
             let n = new BedNeedle(args.shift());
             let cs = args;
 
             if(cs.length === 0){
-                if(op === "miss")
+                if(op === 'miss')
                     throw "ERROR: it makes no sense to miss with no yarns.";
                 else
                     d = DIRECTION_NONE; //miss and drop are directionless
             }
 
-            if(op !== "miss"){
+            if(op !== 'miss'){
                 kickOthers(n, cs);
             }
 
             let type;
-            if(op === "miss" && cs.length === 0){
+            if(op === 'miss' && cs.length === 0){
                 type = TYPE_A_MISS;
             }else{
                 type = TYPE_KNIT_TUCK;
@@ -1138,15 +1173,15 @@ function main(){
                 direction:d
             }
 
-            if(op === "miss") info.slots[slotString(n)] =
+            if(op === 'miss') info.slots[slotString(n)] =
                 (n.isFront() ? OP_MISS_FRONT : OP_MISS_BACK);
-            else if(op === "tuck"){
+            else if(op === 'tuck'){
                 if(n.isFront()){
                     info.slots[slotString(n)] = {color: 11, isFront: true};
                 }else{
                     info.slots[slotString(n)] = {color:12, isBack:true};
                 }
-            }else if(op === "knit"){
+            }else if(op === 'knit'){
                  if(n.isFront()){
                     info.slots[slotString(n)] = {color: 51, isFront: true};
                 }else{
@@ -1158,7 +1193,7 @@ function main(){
             handleIn(cs, info);
             merge(new Pass(info));
             setLast(cs, d, n);
-        } else if(op === "rack"){
+        } else if(op === 'rack'){
             if(args.length !== 1) throw "ERROR: racking takes one argument";
             if(!/^[+-]?\d*\.?\d+$/.test(args[0]))
                 throw "ERROR: racking must be a number";
@@ -1168,7 +1203,7 @@ function main(){
                 throw "ERROR: racking must be an integer or an integer+0.25";
 
             racking = newRacking;
-        }else if(op === "split"){
+        }else if(op === 'split'){
             let d = args.shift();
             let n = new BedNeedle(args.shift()); //from needle
             let t = new BedNeedle(args.shift()); //to needle
@@ -1234,7 +1269,7 @@ function main(){
             handleIn(cs, info);
             merge(new Pass(info));
             setLast(cs, d, n);
-        }else if(op === "pause"){
+        }else if(op === 'pause'){
             //no pauses for this
         }else if(op.match(/^x-/)){
             console.warn("WARNING: unsupported extension operation '"+op+"'.");
@@ -1304,14 +1339,11 @@ function main(){
                 minHeight(activeRow[lastNeedle], bed, lastNeedle)+boxSpacing
                 : neighborHeight(bed, lastNeedle));
 
-            if(lastPass.direction == '+') lastNeedle += 2;
-            else lastNeedle -= 2;
-
             //yarn going to the carrier
-            let xstart = lastNeedle*boxWidth;
+            let xstart = lastNeedle*boxWidth+PADDING;
             let dx = boxWidth/6;
             let dy = boxHeight/4;
-            let start = [xstart, height,CARRIERS+carrierSpacing*c];
+            let start = [xstart, height,CARRIERS+CARRIER_SPACING*c];
             stream.write(format(start[0], start[1], start[2]));
 
             start[0]-=dx;
@@ -1323,7 +1355,7 @@ function main(){
 
             //carrier
             xstart = lastNeedle*boxWidth;
-            start = [xstart, height,CARRIERS+carrierSpacing*c];
+            start = [xstart, height,CARRIERS+CARRIER_SPACING*c];
             stream.write("c "+format(start[0], start[1], start[2]));
 
             start[0]-=dx;
