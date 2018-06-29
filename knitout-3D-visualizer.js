@@ -18,15 +18,6 @@ if (process.argv.length != 4) {
 }
 
 //globals
-
-//layer depths
-const FRONT_BED = 1;
-const BACK_BED = -1;
-const CARRIERS = 0;
-const FRONT_SLIDERS = 0.5;
-const BACK_SLIDERS = -0.5;
-
-
 var knitoutFile = process.argv[2];
 var textFile = process.argv[3];
 const fs = require("fs");
@@ -40,6 +31,16 @@ var boxHeight = 1;
 var boxDepth = 0.1;
 var boxSpacing = boxHeight/2;
 var carrierSpacing = (FRONT_SLIDERS-CARRIERS)/16;
+
+//layer depths
+const FRONT_STITCHES = 1.1;
+const FRONT_BED = 1;
+const BACK_BED = -1;
+const BACK_STITCHES = -1.1;
+const CARRIERS = 0;
+const FRONT_SLIDERS = 0.5;
+const BACK_SLIDERS = -0.5;
+const CROSSING = boxWidth/3;
 
 //different pass types:
 const TYPE_KNIT_TUCK = 'knit-tuck';
