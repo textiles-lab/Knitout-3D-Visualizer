@@ -468,8 +468,8 @@ function tuck(row, direction, bed, needle, carrier){
     }
     maxHeight[spaceNeedle] = stackHeight;
 
-    let start = [needle*(boxWidth+boxSpacing), stackHeight, 0];
     let carrierDepth = CARRIERS+CARRIER_SPACING*carrier;
+    let start = [needle*(boxWidth+boxSpacing), stackHeight, carrierDepth];
 
     if(direction === '-') dx*= -1;
     else start[0] -= boxWidth;
@@ -477,11 +477,11 @@ function tuck(row, direction, bed, needle, carrier){
     if(bed==='b'){
         dz*=-1;
     }
-    start[2] = carrierDepth;
 
     let x = start[0];
     let y = start[1];
     let z = start[2];
+    info.push([x, y, z]);
 
     y = height;
     z = (bed==='b' ? BACK_BED : FRONT_BED);
@@ -586,7 +586,7 @@ function knit(row, direction, bed, needle, carrier){
     }
     maxHeight[spaceNeedle] = stackHeight;
 
-    let start = [needle*(boxWidth+boxSpacing), stackHeight, 0];
+    let start = [needle*(boxWidth+boxSpacing), height, 0];
     let carrierDepth = CARRIERS+CARRIER_SPACING*carrier;
 
     if(direction === '-') dx*= -1;
@@ -595,13 +595,11 @@ function knit(row, direction, bed, needle, carrier){
     if(bed==='b'){
         dz*=-1;
     }
-    start[2] = carrierDepth;
 
     let x = start[0];
     let y = start[1];
     let z = start[2];
 
-    y = height;
     z = (bed==='b' ? BACK_BED : FRONT_BED);
     info.push([x, y, z]);
 
@@ -691,70 +689,94 @@ function xfer(fromSide, fromNeedle, toSide, toNeedle){
     let height = (toActiveRow[toNeedle] ?
             minHeight(toActiveRow[toNeedle], toSide, toNeedle)
             : neighborHeight(toSide, toNeedle));
-    let dx = (info[0].ctrlPts[1][0]-info[0].ctrlPts[0][0])/2;
+    let dx = (info[0].ctrlPts[2][0]-info[0].ctrlPts[1][0])/2;
     let dy =  boxHeight/3;
     let dz = boxDepth/2;
     let dir = (dx<0 ? '-' : '+');
-    let start = [toNeedle*boxWidth, height, 0];
+    let padding = (dir==='-' ? -PADDING : PADDING);
 
-    if(dir === '+') start[0]-=boxWidth;
+    let stackHeight = height;
+    let spaceNeedle = (dir==='-' ? toNeedle : toNeedle+1);
 
-    if(toSide === 'b'){
+    if(maxHeight[spaceNeedle] !=='undefined' && height<=maxHeight[spaceNeedle]){
+        stackHeight = maxHeight[spaceNeedle]+epsilon;
+    }
+    maxHeight[spaceNeedle] = stackHeight;
+
+    let start = [toNeedle*(boxWidth+boxSpacing), height, 0];
+
+    if(dir === '-') dx*= -1;
+    else start[0] -= boxWidth;
+    if(toSide==='b'){
         dz*=-1;
-        start[2] = BACK_BED;
-    }else{
-        start[2] = FRONT_BED;
     }
 
     let x = start[0];
     let y = start[1];
     let z = start[2];
 
+    //point 0
+    y = height;
+    z = (toSide==='b' ? BACK_BED : FRONT_BED);
+
+    //point 1
+    x += padding;
+
+    // point 2
     x += 2*dx;
     z -= dz;
 
+    //point 3
     y += dy;
     z += 2*dz;
-
-    x -= dx;
     for(let i = 0; i<info.length; i++){
         info[i].ctrlPts[3] = [x, y, z];
     }
 
-    y += dy;
+    //point 4
+    x -= dx;
     for(let i = 0; i<info.length; i++){
         info[i].ctrlPts[4] = [x, y, z];
     }
 
-    x += dx;
-    z -= 2*dz;
+    //point 5
+    y += dy;
     for(let i = 0; i<info.length; i++){
         info[i].ctrlPts[5] = [x, y, z];
     }
 
+    //point 6
     x += dx;
+    z -= 2*dz;
     for(let i = 0; i<info.length; i++){
         info[i].ctrlPts[6] = [x, y, z];
     }
 
+    //point 7
     x += dx;
-    z += 2*dz;
     for(let i = 0; i<info.length; i++){
         info[i].ctrlPts[7] = [x, y, z];
     }
 
-    y -= dy;
+    //point 8
+    x += dx;
+    z += 2*dz;
     for(let i = 0; i<info.length; i++){
         info[i].ctrlPts[8] = [x, y, z];
     }
 
-    x -= dx;
-
+    //point 9
     y -= dy;
-    z -= 2*dz;
+    for(let i = 0; i<info.length; i++){
+        info[i].ctrlPts[9] = [x, y, z];
+    }
 
-    x += 2*dx;
-    z += dz;
+    //point 10
+    x -= dx;
+    for(let i = 0; i<info.length; i++){
+        info[i].ctrlPts[10] = [x, y, z];
+    }
+
 
     if(toActiveRow[toNeedle]){
         toActiveRow[toNeedle].n += fromActiveRow[fromNeedle].n;
@@ -1196,7 +1218,7 @@ function main(){
                     info.slots[slotString(n)] = {color:12, isBack:true};
                 }
             }else if(op === 'knit'){
-                 if(n.isFront()){
+                if(n.isFront()){
                     info.slots[slotString(n)] = {color: 51, isFront: true};
                 }else{
                     info.slots[slotString(n)] = {color:52, isBack:true};
@@ -1303,6 +1325,7 @@ function main(){
     });
     console.log("Slots lie in ["+minSlot+", "+maxSlot+"].");
 
+    let lastPass;
     let row = 0;
     passes.forEach(function(pass){
         let direction;
@@ -1337,50 +1360,52 @@ function main(){
         }
         if (pass.type === TYPE_KNIT_TUCK && !empty){
             row++;
+            lastPass = pass;
         }
     });
     makeTxt();
+    if(lastPass!='undefined'){
+        lastPass.carriers.forEach(function(c){
+            if(c in carriers){
+                let lastNeedle = parseInt(carriers[c].last.needle.needle);
+                let bed = carriers[c].last.needle.bed;
+                let activeRow = (bed==='f' ? frontActiveRow : backActiveRow);
+                let direction = lastPass.direction;
 
-    let lastPass = passes[passes.length-1];
-    lastPass.carriers.forEach(function(c){
-        if(c in carriers){
-            let lastNeedle = parseInt(carriers[c].last.needle.needle);
-            let bed = carriers[c].last.needle.bed;
-            let activeRow = (bed==='f' ? frontActiveRow : backActiveRow);
+                let height = (activeRow[lastNeedle] ?
+                        minHeight(activeRow[lastNeedle], bed, lastNeedle)
+                        : neighborHeight(bed, lastNeedle));
 
-            let height = (activeRow[lastNeedle] ?
-                minHeight(activeRow[lastNeedle], bed, lastNeedle)
-                : neighborHeight(bed, lastNeedle));
+                lastNeedle += (direction==='+' ? 1 : -1);
 
-            lastNeedle++;
+                //yarn going to the carrier
+                let xstart = lastNeedle*(boxWidth+boxSpacing)+PADDING;
+                let dx = boxWidth/6;
+                let dy = boxHeight/4;
+                let start = [xstart, height,CARRIERS+CARRIER_SPACING*c];
+                stream.write(format(start[0], start[1], start[2]));
 
-            //yarn going to the carrier
-            let xstart = lastNeedle*(boxWidth+boxSpacing)+PADDING;
-            let dx = boxWidth/6;
-            let dy = boxHeight/4;
-            let start = [xstart, height,CARRIERS+CARRIER_SPACING*c];
-            stream.write(format(start[0], start[1], start[2]));
+                start[0]-=dx;
+                start[1]+=dy;
+                stream.write(format(start[0], start[1], start[2]));
 
-            start[0]-=dx;
-            start[1]+=dy;
-            stream.write(format(start[0], start[1], start[2]));
+                start[0]+=2*dx;
+                stream.write(format(start[0], start[1], start[2]));
 
-            start[0]+=2*dx;
-            stream.write(format(start[0], start[1], start[2]));
+                //carrier
+                xstart = lastNeedle*(boxWidth+boxSpacing)+PADDING;
+                start = [xstart, height,CARRIERS+CARRIER_SPACING*c];
+                stream.write("c "+format(start[0], start[1], start[2]));
 
-            //carrier
-            xstart = lastNeedle*(boxWidth+boxSpacing)+PADDING;
-            start = [xstart, height,CARRIERS+CARRIER_SPACING*c];
-            stream.write("c "+format(start[0], start[1], start[2]));
+                start[0]-=dx;
+                start[1]+=dy;
+                stream.write("c "+format(start[0], start[1], start[2]));
 
-            start[0]-=dx;
-            start[1]+=dy;
-            stream.write("c "+format(start[0], start[1], start[2]));
-
-            start[0]+=2*dx;
-            stream.write("c "+format(start[0], start[1], start[2]));
-        }
-    });
+                start[0]+=2*dx;
+                stream.write("c "+format(start[0], start[1], start[2]));
+            }
+        });
+    }
 
 }
 
