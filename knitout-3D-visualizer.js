@@ -456,11 +456,19 @@ function tuck(row, direction, bed, needle, carrier){
     let padding = (direction==='-' ? -PADDING : PADDING);
 
     let activeRow = (bed==='f' ? frontActiveRow : backActiveRow);
-
     let height = (activeRow[needle] ?
             minHeight(activeRow[needle], bed, needle)+boxSpacing
             : neighborHeight(bed, needle));
-    let start = [needle*(boxWidth+boxSpacing), height, 0];
+
+    let stackHeight = height;
+    let spaceNeedle = (direction==='-' ? needle : needle+1);
+
+    if(maxHeight[spaceNeedle] !=='undefined' && height<=maxHeight[spaceNeedle]){
+        stackHeight = maxHeight[spaceNeedle]+epsilon;
+    }
+    maxHeight[spaceNeedle] = stackHeight;
+
+    let start = [needle*(boxWidth+boxSpacing), stackHeight, 0];
     let carrierDepth = CARRIERS+CARRIER_SPACING*carrier;
 
     if(direction === '-') dx*= -1;
@@ -475,10 +483,7 @@ function tuck(row, direction, bed, needle, carrier){
     let y = start[1];
     let z = start[2];
 
-
-    info.push([x, y, z]);
-    maxHeight[needle] = y;
-
+    y = height;
     z = (bed==='b' ? BACK_BED : FRONT_BED);
     info.push([x, y, z]);
 
@@ -527,6 +532,7 @@ function tuck(row, direction, bed, needle, carrier){
     x += padding;
     info.push([x, y, z]);
 
+    y = stackHeight;
     z = carrierDepth;
     info.push([x, y, z]);
 
@@ -573,9 +579,9 @@ function knit(row, direction, bed, needle, carrier){
             : neighborHeight(bed, needle));
 
     let stackHeight = height;
-    let spaceNeedle = (bed==='f' ? needle : needle+1);
+    let spaceNeedle = (direction==='-' ? needle : needle+1);
 
-    if(height<=maxHeight[spaceNeedle]){
+    if(maxHeight[spaceNeedle] !=='undefined' && height<=maxHeight[spaceNeedle]){
         stackHeight = maxHeight[spaceNeedle]+epsilon;
     }
     maxHeight[spaceNeedle] = stackHeight;
@@ -594,8 +600,6 @@ function knit(row, direction, bed, needle, carrier){
     let x = start[0];
     let y = start[1];
     let z = start[2];
-
-    info.push([x, y, z]);
 
     y = height;
     z = (bed==='b' ? BACK_BED : FRONT_BED);
