@@ -415,12 +415,12 @@ function pointName(plane, needle, direction, carrier){
 }
 
 //gets the necessary height to prevent intersections at the carrier level
-function getMaxHeight(minHeight, needle1, needle2){
+function getMaxHeight(minHeight, current, prev){
     let max = minHeight;
-    let lowerBound = Math.min(needle1, needle2);
-    let upperBound = Math.max(needle1, needle2);
+    let lowerBound = Math.min(current, prev);
+    let upperBound = Math.max(current, prev);
     for(let i = lowerBound; i<=upperBound; i++){
-        if(maxHeight[i]!='undefined' && max<=maxHeight[i])
+        if(i!=prev && maxHeight[i]!='undefined' && max<=maxHeight[i])
             max = maxHeight[i]+epsilon;
     }
     return max;
@@ -476,8 +476,15 @@ function minHeight(needleSpec, bed, needle){
     return min;
 }
 
+//converts a carrier string to a set number
+function getCarrierNum(){
+//TODO
+}
+
 //makes a list of points for a standard stitch
 function makeStitch(row, direction, bed, needle, carrier){
+    let c = parseInt(carrier);
+
     let info = [];
     let width = boxWidth-PADDING*2;
     let dx = width/5;
@@ -486,18 +493,32 @@ function makeStitch(row, direction, bed, needle, carrier){
     let padding = (direction==='-' ? -PADDING : PADDING);
 
     let activeRow = (bed==='f' ? frontActiveRow : backActiveRow);
+    let startNeedle = (direction==='-' ? needle : needle+1);
+    let endNeedle = (direction==='-' ? needle-1 : needle+1);
+    let prevNeedle = (direction==='-' ? lastNeedle : lastNeedle+1);
+
     let height = (activeRow[needle] ?
             minHeight(activeRow[needle], bed, needle)+boxSpacing
             : neighborHeight(bed, needle));
 
-    let spaceNeedle = (direction==='-' ? needle : needle+1);
-    let prevNeedle = (direction==='-' ? lastNeedle : lastNeedle+1);
-    let stackHeight = getMaxHeight(height, spaceNeedle, prevNeedle);
+    let startCarrierHeight = (maxHeight[prevNeedle]!=='undefined' ?
+                            maxHeight[prevNeedle] : height);
+    let lowerBound = Math.min(startNeedle, prevNeedle);
+    let upperBound = Math.max(startNeedle, prevNeedle);
+    for(let i = lowerBound; i<=upperBound; i++){
+        if(i!=prevNeedle && maxHeight[i]!='undefined'
+                && startCarrierHeight<=maxHeight[i]){
+            startCarrierHeight = maxHeight[i]+epsilon;
+            //TODO update prev height
+        }
+    }
 
-    setMaxHeight(spaceNeedle, prevNeedle, stackHeight);
+    let endCarrierHeight = startCarrierHeight;
+    setMaxHeight(startNeedle, prevNeedle, startCarrierHeight);
+    setMaxHeight(endNeedle, endNeedle, endCarrierHeight)
 
-    let carrierDepth = CARRIERS+CARRIER_SPACING*carrier;
-    let start = [needle*(boxWidth+boxSpacing), maxHeight[prevNeedle], carrierDepth];
+    let carrierDepth = CARRIERS+CARRIER_SPACING*c;
+    let start = [needle*(boxWidth+boxSpacing), startCarrierHeight, carrierDepth];
 
     if(direction === '-') dx*= -1;
     else start[0] -= boxWidth;
@@ -561,7 +582,7 @@ function makeStitch(row, direction, bed, needle, carrier){
     x += padding;
     info.push([x, y, z]);
 
-    y = stackHeight;
+    y = endCarrierHeight;
     z = carrierDepth;
     info.push([x, y, z]);
 
@@ -570,6 +591,24 @@ function makeStitch(row, direction, bed, needle, carrier){
 
     return info;
 }
+
+//wrapper for makeStitch for xfers, because xfer handles heights differently
+/*function makeXferStitch(row, direction, fromSide, fromNeedle, toSide, toNeedle,
+        carrier){
+    let info = makeStitch(row, direction, toSide, toNeedle, carrier);
+    let fromActiveRow = (fromSide==='f' ? frontActiveRow : backActiveRow);
+    let toActiveRow = (toSide==='f' ? frontActiveRow : backActiveRow);
+    let height = (toActiveRow[toNeedle] ?
+            minHeight(toActiveRow[fromNeedle], fromSide, fromNeedle)
+            : neighborHeight(fromSide, fromNeedle));
+
+    console.log(info);
+    for(let i = 0; i<info.length; i++){
+
+    }
+    return info;
+}*/
+
 
 /*basic knitout functions
  * each should take:
@@ -646,11 +685,14 @@ function xfer(fromSide, fromNeedle, toSide, toNeedle){
 
     let dx = (info[0].ctrlPts[2][0]-info[0].ctrlPts[1][0])/2;
     let direction = (dx<0 ? '-' : '+');
-    let updatedInfo = makeStitch(specs.row, direction, toSide, toNeedle);
+    let updatedInfo = makeStitch(specs.row, direction, toSide, toNeedle,info[0].carrier);
 
-    for(let i = 4; i<=11; i++){
+    for(let i = 5; i<=10; i++){
         for(let j = 0; j<info.length; j++){
-            info[j].ctrlPts[i] = updatedInfo[i];
+            let x = updatedInfo[i][0]-epsilon;
+            let y = updatedInfo[i][1]-epsilon;
+            let z = updatedInfo[i][2]-epsilon;
+            info[j].ctrlPts[i] = [x, y, z];
         }
     }
 
@@ -1258,19 +1300,11 @@ function main(){
                 let xstart = lastNeedle*(boxWidth+boxSpacing)+PADDING;
                 let dx = boxWidth/6;
                 let dy = boxHeight/4;
-                let start = [xstart, height,CARRIERS+CARRIER_SPACING*c];
-                stream.write(format(start[0], start[1], start[2]));
-
-                start[0]-=dx;
-                start[1]+=dy;
-                stream.write(format(start[0], start[1], start[2]));
-
-                start[0]+=2*dx;
+                let carrierDepth = CARRIERS+CARRIER_SPACING*c;
+                let start = [xstart, height, carrierDepth];
                 stream.write(format(start[0], start[1], start[2]));
 
                 //carrier
-                xstart = lastNeedle*(boxWidth+boxSpacing)+PADDING;
-                start = [xstart, height,CARRIERS+CARRIER_SPACING*c];
                 stream.write("c "+format(start[0], start[1], start[2]));
 
                 start[0]-=dx;
