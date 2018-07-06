@@ -24,9 +24,12 @@ const fs = require('fs');
 var stream = fs.createWriteStream(textFile);
 var frontActiveRow = [];
 var backActiveRow = [];
+var lastNeedle;
 //stores current "highest" yarn in the transfer area at the end of each stitch
 var maxHeight = [];
+var pointHeight = {};
 var passes = [];
+var carriers = [];
 
 var boxWidth = 1;
 var boxHeight = 1;
@@ -384,12 +387,14 @@ function loopSpec(row){
     this.n = 1;
 }
 
+
 //stores things for each needle with yarn on it
 function loop(pts, carrier){
     //ctrlPts: the coordinates of each point on the loop
     this.ctrlPts = pts;
     this.carrier = carrier;
 }
+
 
 
 function format(x, y, z){
@@ -399,6 +404,37 @@ function format(x, y, z){
 function errorHandler(err, data){
     if(err) return console.error(err);
 }
+
+
+function pointName(plane, needle, direction, carrier){
+    //planes should be 'f' or 'b' or 'c-*'
+    //needle should be int
+    //direction should be '+' or '-' or '' if 'f' or 'b' for plane
+    //carrier should be some string or '' if 'f' or 'b' for plane
+    //  console.assert(
+}
+
+//gets the necessary height to prevent intersections at the carrier level
+function getMaxHeight(minHeight, needle1, needle2){
+    let max = minHeight;
+    let lowerBound = Math.min(needle1, needle2);
+    let upperBound = Math.max(needle1, needle2);
+    for(let i = lowerBound; i<=upperBound; i++){
+        if(maxHeight[i]!='undefined' && max<=maxHeight[i])
+            max = maxHeight[i]+epsilon;
+    }
+    return max;
+}
+
+//updates max height for a range
+function setMaxHeight(needle1, needle2, newHeight){
+    let lowerBound = Math.min(needle1, needle2);
+    let upperBound = Math.max(needle1, needle2);
+    for(let i = lowerBound; i<=upperBound; i++){
+        maxHeight[i] = newHeight;
+    }
+}
+
 
 //gets yarn "height" of neighbors
 function neighborHeight(bed, needle){
@@ -440,14 +476,8 @@ function minHeight(needleSpec, bed, needle){
     return min;
 }
 
-/*basic knitout functions
- * each should take:
- *  -start: array of components of the start position
- *  -direction: direction of the current pass,
- *  -bed: the needle bed
- */
-
-function tuck(row, direction, bed, needle, carrier){
+//makes a list of points for a standard stitch
+function makeStitch(row, direction, bed, needle, carrier){
     let info = [];
     let width = boxWidth-PADDING*2;
     let dx = width/5;
@@ -460,16 +490,14 @@ function tuck(row, direction, bed, needle, carrier){
             minHeight(activeRow[needle], bed, needle)+boxSpacing
             : neighborHeight(bed, needle));
 
-    let stackHeight = height;
     let spaceNeedle = (direction==='-' ? needle : needle+1);
+    let prevNeedle = (direction==='-' ? lastNeedle : lastNeedle+1);
+    let stackHeight = getMaxHeight(height, spaceNeedle, prevNeedle);
 
-    if(maxHeight[spaceNeedle] !=='undefined' && height<=maxHeight[spaceNeedle]){
-        stackHeight = maxHeight[spaceNeedle]+epsilon;
-    }
-    maxHeight[spaceNeedle] = stackHeight;
+    setMaxHeight(spaceNeedle, prevNeedle, stackHeight);
 
     let carrierDepth = CARRIERS+CARRIER_SPACING*carrier;
-    let start = [needle*(boxWidth+boxSpacing), stackHeight, carrierDepth];
+    let start = [needle*(boxWidth+boxSpacing), maxHeight[prevNeedle], carrierDepth];
 
     if(direction === '-') dx*= -1;
     else start[0] -= boxWidth;
@@ -481,6 +509,7 @@ function tuck(row, direction, bed, needle, carrier){
     let x = start[0];
     let y = start[1];
     let z = start[2];
+
     info.push([x, y, z]);
 
     y = height;
@@ -536,9 +565,22 @@ function tuck(row, direction, bed, needle, carrier){
     z = carrierDepth;
     info.push([x, y, z]);
 
-    x+= (direction==='-' ? -boxSpacing : boxSpacing);
+    x += (direction === '-' ? -boxSpacing : boxSpacing);
     info.push([x, y, z]);
 
+    return info;
+}
+
+/*basic knitout functions
+ * each should take:
+ *  -start: array of components of the start position
+ *  -direction: direction of the current pass,
+ *  -bed: the needle bed
+ */
+
+function tuck(row, direction, bed, needle, carrier){
+    let activeRow = (bed==='f' ? frontActiveRow : backActiveRow);
+    let info = makeStitch(row, direction, bed, needle, carrier);
     let newLoop = new loop(info, carrier);
     if(yarn[row]){
         let yarnLoops = (bed==='f' ? yarn[row].floops : yarn[row].bloops);
@@ -563,97 +605,12 @@ function tuck(row, direction, bed, needle, carrier){
         activeRow[needle].row = [row];
         activeRow[needle].n++;
     }
+    lastNeedle = needle;
 }
 
 function knit(row, direction, bed, needle, carrier){
-    let info = [];
-    let width = boxWidth-PADDING*2;
-    let dx = width/5;
-    let dy =  boxHeight/3;
-    let dz = boxDepth/2;
-    let padding = (direction==='-' ? -PADDING : PADDING);
-
     let activeRow = (bed==='f' ? frontActiveRow : backActiveRow);
-    let height = (activeRow[needle] ?
-            minHeight(activeRow[needle], bed, needle)+boxSpacing
-            : neighborHeight(bed, needle));
-
-    let stackHeight = height;
-    let spaceNeedle = (direction==='-' ? needle : needle+1);
-
-    if(maxHeight[spaceNeedle] !=='undefined' && height<=maxHeight[spaceNeedle]){
-        stackHeight = maxHeight[spaceNeedle]+epsilon;
-    }
-    maxHeight[spaceNeedle] = stackHeight;
-
-    let start = [needle*(boxWidth+boxSpacing), height, 0];
-    let carrierDepth = CARRIERS+CARRIER_SPACING*carrier;
-
-    if(direction === '-') dx*= -1;
-    else start[0] -= boxWidth;
-
-    if(bed==='b'){
-        dz*=-1;
-    }
-
-    let x = start[0];
-    let y = start[1];
-    let z = start[2];
-
-    z = (bed==='b' ? BACK_BED : FRONT_BED);
-    info.push([x, y, z]);
-
-    x += padding;
-    info.push([x, y, z]);
-
-    x += 2*dx;
-    z -= dz;
-    info.push([x, y, z]);
-
-    y += dy;
-    z += 2*dz;
-    info.push([x, y, z]);
-
-    x -= dx;
-    info.push([x, y, z]);
-
-    y += dy;
-    info.push([x, y, z]);
-
-    x += dx;
-    z -= 2*dz;
-    info.push([x, y, z]);
-
-    x += dx;
-    info.push([x, y, z]);
-
-    x += dx;
-    z += 2*dz;
-    info.push([x, y, z]);
-
-    y -= dy;
-    info.push([x, y, z]);
-
-    x -= dx;
-    info.push([x, y, z]);
-
-    y -= dy;
-    z -= 2*dz;
-    info.push([x, y, z]);
-
-    x += 2*dx;
-    z += dz;
-    info.push([x, y, z]);
-
-    x += padding;
-    info.push([x, y, z]);
-
-    y = stackHeight;
-    z = carrierDepth;
-    info.push([x, y, z]);
-
-    x+= (direction==='-' ? -boxSpacing : boxSpacing);
-    info.push([x, y, z]);
+    let info = makeStitch(row, direction, bed, needle, carrier);
 
     let newLoop = new loop(info, carrier);
     if(yarn[row]){
@@ -672,6 +629,7 @@ function knit(row, direction, bed, needle, carrier){
     }
 
     activeRow[needle] = new loopSpec(row);
+    lastNeedle = needle;
 }
 
 function xfer(fromSide, fromNeedle, toSide, toNeedle){
@@ -686,97 +644,15 @@ function xfer(fromSide, fromNeedle, toSide, toNeedle){
     let info = (fromSide==='f' ? yarn[specs.row].floops[fromNeedle]
             : yarn[specs.row].bloops[fromNeedle]);
 
-    let height = (toActiveRow[toNeedle] ?
-            minHeight(toActiveRow[toNeedle], toSide, toNeedle)
-            : neighborHeight(toSide, toNeedle));
     let dx = (info[0].ctrlPts[2][0]-info[0].ctrlPts[1][0])/2;
-    let dy =  boxHeight/3;
-    let dz = boxDepth/2;
-    let dir = (dx<0 ? '-' : '+');
-    let padding = (dir==='-' ? -PADDING : PADDING);
+    let direction = (dx<0 ? '-' : '+');
+    let updatedInfo = makeStitch(specs.row, direction, toSide, toNeedle);
 
-    let stackHeight = height;
-    let spaceNeedle = (dir==='-' ? toNeedle : toNeedle+1);
-
-    if(maxHeight[spaceNeedle] !=='undefined' && height<=maxHeight[spaceNeedle]){
-        stackHeight = maxHeight[spaceNeedle]+epsilon;
+    for(let i = 4; i<=11; i++){
+        for(let j = 0; j<info.length; j++){
+            info[j].ctrlPts[i] = updatedInfo[i];
+        }
     }
-    maxHeight[spaceNeedle] = stackHeight;
-
-    let start = [toNeedle*(boxWidth+boxSpacing), height, 0];
-
-    if(dir === '-') dx*= -1;
-    else start[0] -= boxWidth;
-    if(toSide==='b'){
-        dz*=-1;
-    }
-
-    let x = start[0];
-    let y = start[1];
-    let z = start[2];
-
-    //point 0
-    y = height;
-    z = (toSide==='b' ? BACK_BED : FRONT_BED);
-
-    //point 1
-    x += padding;
-
-    // point 2
-    x += 2*dx;
-    z -= dz;
-
-    //point 3
-    y += dy;
-    z += 2*dz;
-    for(let i = 0; i<info.length; i++){
-        info[i].ctrlPts[3] = [x, y, z];
-    }
-
-    //point 4
-    x -= dx;
-    for(let i = 0; i<info.length; i++){
-        info[i].ctrlPts[4] = [x, y, z];
-    }
-
-    //point 5
-    y += dy;
-    for(let i = 0; i<info.length; i++){
-        info[i].ctrlPts[5] = [x, y, z];
-    }
-
-    //point 6
-    x += dx;
-    z -= 2*dz;
-    for(let i = 0; i<info.length; i++){
-        info[i].ctrlPts[6] = [x, y, z];
-    }
-
-    //point 7
-    x += dx;
-    for(let i = 0; i<info.length; i++){
-        info[i].ctrlPts[7] = [x, y, z];
-    }
-
-    //point 8
-    x += dx;
-    z += 2*dz;
-    for(let i = 0; i<info.length; i++){
-        info[i].ctrlPts[8] = [x, y, z];
-    }
-
-    //point 9
-    y -= dy;
-    for(let i = 0; i<info.length; i++){
-        info[i].ctrlPts[9] = [x, y, z];
-    }
-
-    //point 10
-    x -= dx;
-    for(let i = 0; i<info.length; i++){
-        info[i].ctrlPts[10] = [x, y, z];
-    }
-
 
     if(toActiveRow[toNeedle]){
         toActiveRow[toNeedle].n += fromActiveRow[fromNeedle].n;
@@ -809,12 +685,12 @@ function xfer(fromSide, fromNeedle, toSide, toNeedle){
 function makeTxt(){
     let mostRecentC;
     for(let row = 0; row<yarn.length; row++){
-        let dir = yarn[row].direction;
+        let direction = yarn[row].direction;
         let yarnRow = yarn[row];
         let maxNeedle = Math.max(yarnRow.floops.length, yarnRow.bloops.length);
         for(let col = 0; col<maxNeedle; col++){
             let needle = col;
-            if(dir === '-') needle = maxNeedle-col-1;
+            if(direction === '-') needle = maxNeedle-col-1;
 
             let loop = yarnRow.floops[needle];
             if(loop){
