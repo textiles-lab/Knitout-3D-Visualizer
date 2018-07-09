@@ -420,19 +420,19 @@ function getMaxHeight(minHeight, current, prev){
     let lowerBound = Math.min(current, prev);
     let upperBound = Math.max(current, prev);
     for(let i = lowerBound; i<=upperBound; i++){
-        if(i!=prev && maxHeight[i]!='undefined' && max<=maxHeight[i])
+        if(i!=prev && maxHeight[i]!=undefined && max<=maxHeight[i])
             max = maxHeight[i]+epsilon;
     }
     return max;
 }
 
-//updates max height for a range
-function setMaxHeight(needle1, needle2, newHeight){
-    let lowerBound = Math.min(needle1, needle2);
-    let upperBound = Math.max(needle1, needle2);
-    for(let i = lowerBound; i<=upperBound; i++){
-        maxHeight[i] = newHeight;
-    }
+//updates max height for the last two points of the previous stitch, given
+//lastNeedle, an object holding the needle specs; prevCarrierNeedle, an int
+//representing the index of maxHeight array that the last needle is represented
+//by; currentCarrierNeedle, the maxHeight index of the most recent stitch; and
+//x, the starting x coordinate of the current stitch.
+function setMaxHeight(x, currentCarrierNeedle, lastNeedle, prevCarrierNeedle){
+
 }
 
 
@@ -478,7 +478,7 @@ function minHeight(needleSpec, bed, needle){
 
 //converts a carrier string to a set number
 function getCarrierNum(){
-//TODO
+    //TODO
 }
 
 //makes a list of points for a standard stitch
@@ -491,35 +491,14 @@ function makeStitch(row, direction, bed, needle, carrier){
     let dy =  boxHeight/3;
     let dz = boxDepth/2;
     let padding = (direction==='-' ? -PADDING : PADDING);
+    let carrierDepth = CARRIERS+CARRIER_SPACING*c;
 
     let activeRow = (bed==='f' ? frontActiveRow : backActiveRow);
-    let startNeedle = (direction==='-' ? needle : needle+1);
-    let endNeedle = (direction==='-' ? needle-1 : needle+1);
-    let prevNeedle = (direction==='-' ? lastNeedle : lastNeedle+1);
-
     let height = (activeRow[needle] ?
             minHeight(activeRow[needle], bed, needle)+boxSpacing
             : neighborHeight(bed, needle));
 
-    let startCarrierHeight = (maxHeight[prevNeedle]!=='undefined' ?
-                            maxHeight[prevNeedle] : height);
-    let lowerBound = Math.min(startNeedle, prevNeedle);
-    let upperBound = Math.max(startNeedle, prevNeedle);
-    for(let i = lowerBound; i<=upperBound; i++){
-        if(i!=prevNeedle && maxHeight[i]!='undefined'
-                && startCarrierHeight<=maxHeight[i]){
-            startCarrierHeight = maxHeight[i]+epsilon;
-            //TODO update prev height
-        }
-    }
-
-    let endCarrierHeight = startCarrierHeight;
-    setMaxHeight(startNeedle, prevNeedle, startCarrierHeight);
-    setMaxHeight(endNeedle, endNeedle, endCarrierHeight)
-
-    let carrierDepth = CARRIERS+CARRIER_SPACING*c;
-    let start = [needle*(boxWidth+boxSpacing), startCarrierHeight, carrierDepth];
-
+    let start = [needle*(boxWidth+boxSpacing), height, carrierDepth];
     if(direction === '-') dx*= -1;
     else start[0] -= boxWidth;
 
@@ -527,13 +506,25 @@ function makeStitch(row, direction, bed, needle, carrier){
         dz*=-1;
     }
 
+    let carrierNeedle = (direction==='-' ? needle : needle+1);
+    let prevNeedle;
+    if(lastNeedle!==undefined)
+        prevNeedle = (direction==='-' ? lastNeedle.needle : lastNeedle.needle-1);
+
+    //set previous last point, making sure to search heights
+    setMaxHeight(start[0], carrierNeedle, lastNeedle, prevNeedle);
+
+    let carrierHeight = (maxHeight[carrierNeedle]!==undefined ?
+            maxHeight[carrierNeedle]+epsilon : height);
+    maxHeight[carrierNeedle] = carrierHeight;
+
+
+
+
     let x = start[0];
     let y = start[1];
     let z = start[2];
 
-    info.push([x, y, z]);
-
-    y = height;
     z = (bed==='b' ? BACK_BED : FRONT_BED);
     info.push([x, y, z]);
 
@@ -582,7 +573,7 @@ function makeStitch(row, direction, bed, needle, carrier){
     x += padding;
     info.push([x, y, z]);
 
-    y = endCarrierHeight;
+    y = carrierHeight;
     z = carrierDepth;
     info.push([x, y, z]);
 
@@ -594,20 +585,20 @@ function makeStitch(row, direction, bed, needle, carrier){
 
 //wrapper for makeStitch for xfers, because xfer handles heights differently
 /*function makeXferStitch(row, direction, fromSide, fromNeedle, toSide, toNeedle,
-        carrier){
-    let info = makeStitch(row, direction, toSide, toNeedle, carrier);
-    let fromActiveRow = (fromSide==='f' ? frontActiveRow : backActiveRow);
-    let toActiveRow = (toSide==='f' ? frontActiveRow : backActiveRow);
-    let height = (toActiveRow[toNeedle] ?
-            minHeight(toActiveRow[fromNeedle], fromSide, fromNeedle)
-            : neighborHeight(fromSide, fromNeedle));
+  carrier){
+  let info = makeStitch(row, direction, toSide, toNeedle, carrier);
+  let fromActiveRow = (fromSide==='f' ? frontActiveRow : backActiveRow);
+  let toActiveRow = (toSide==='f' ? frontActiveRow : backActiveRow);
+  let height = (toActiveRow[toNeedle] ?
+  minHeight(toActiveRow[fromNeedle], fromSide, fromNeedle)
+  : neighborHeight(fromSide, fromNeedle));
 
-    console.log(info);
-    for(let i = 0; i<info.length; i++){
+  console.log(info);
+  for(let i = 0; i<info.length; i++){
 
-    }
-    return info;
-}*/
+  }
+  return info;
+  }*/
 
 
 /*basic knitout functions
@@ -644,7 +635,9 @@ function tuck(row, direction, bed, needle, carrier){
         activeRow[needle].row = [row];
         activeRow[needle].n++;
     }
-    lastNeedle = needle;
+    lastNeedle = {}
+    lastNeedle.needle = needle;
+    lastNeedle.bed = bed;
 }
 
 function knit(row, direction, bed, needle, carrier){
@@ -668,7 +661,9 @@ function knit(row, direction, bed, needle, carrier){
     }
 
     activeRow[needle] = new loopSpec(row);
-    lastNeedle = needle;
+    lastNeedle = {};
+    lastNeedle.needle = needle;
+    lastNeedle.bed = bed;
 }
 
 function xfer(fromSide, fromNeedle, toSide, toNeedle){
@@ -1282,7 +1277,7 @@ function main(){
         }
     });
     makeTxt();
-    if(lastPass!='undefined'){
+    if(lastPass!=undefined){
         lastPass.carriers.forEach(function(c){
             if(c in carriers){
                 let lastNeedle = parseInt(carriers[c].last.needle.needle);
