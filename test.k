@@ -4,5 +4,3 @@ inhook 6
 stitch 20 25
 tuck - f4 6
 tuck - f2 6
-tuck + f1 6
-tuck + f3 6

@@ -432,7 +432,46 @@ function getMaxHeight(minHeight, current, prev){
 //by; currentCarrierNeedle, the maxHeight index of the most recent stitch; and
 //x, the starting x coordinate of the current stitch.
 function setMaxHeight(x, currentCarrierNeedle, lastNeedle, prevCarrierNeedle){
+    let lowerBound = Math.min(currentCarrierNeedle, prevCarrierNeedle);
+    let upperBound = Math.max(currentCarrierNeedle, prevCarrierNeedle);
 
+    let max = maxHeight[prevCarrierNeedle];
+
+    //determine the needed height
+    for(let i = lowerBound; i<=upperBound; i++){
+        if(i!=currentCarrierNeedle && i!=prevCarrierNeedle){
+            let current = maxHeight[i];
+            if(current!==undefined && current>=max){
+                max = current+epsilon;
+            }
+        }
+    }
+
+    if(max!==undefined){
+        //set new maxHeight for all the slots that the yarn passes over
+        for(let j = lowerBound; j<=upperBound; j++){
+            if(j!=currentCarrierNeedle){
+                maxHeight[j] = max;
+            }
+        }
+
+        //shift the actual yarn up
+        if(lastNeedle!==undefined){
+            let specs = (lastNeedle.bed==='f' ? frontActiveRow : backActiveRow)
+                [lastNeedle.needle];
+            let info = yarn[specs.row];
+            info = (lastNeedle.bed==='f' ? info.floops : info.bloops);
+            info = info[lastNeedle.needle];
+
+            for(let i = 0; i<info.length; i++){
+                let pts = info[i].ctrlPts;
+                let last = pts.length-1;
+                pts[last-1][1] = max;
+                pts[last][1] = max;
+                //pts[last][0] = x TODO after fixing merge stuff
+            }
+        }
+    }
 }
 
 
@@ -509,10 +548,12 @@ function makeStitch(row, direction, bed, needle, carrier){
     let carrierNeedle = (direction==='-' ? needle : needle+1);
     let prevNeedle;
     if(lastNeedle!==undefined)
-        prevNeedle = (direction==='-' ? lastNeedle.needle : lastNeedle.needle-1);
+        prevNeedle = (direction==='-' ? lastNeedle.needle : lastNeedle.needle+1);
 
+   // console.log(needle);
+    //console.log(lastNeedle);
     //set previous last point, making sure to search heights
-    setMaxHeight(start[0], carrierNeedle, lastNeedle, prevNeedle);
+    //setMaxHeight(start[0]-boxWidth, carrierNeedle, lastNeedle, prevNeedle);
 
     let carrierHeight = (maxHeight[carrierNeedle]!==undefined ?
             maxHeight[carrierNeedle]+epsilon : height);
