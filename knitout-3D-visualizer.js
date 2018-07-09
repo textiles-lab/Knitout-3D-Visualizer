@@ -808,89 +808,7 @@ function main(){
         if(passes.length !== 0 && passes[passes.length-1].append(pass)){
             //merged fine
         }else{
-            //starting a new pass
-            //If there are carriers, make sure they start on pass'scorrect side:
-            //which slot is this pass acting on?
-            let passSlot;
-            for(let s in pass.slots){
-                console.assert(typeof(passSlot)==='undefined',
-                        "only one slot in pass to merge");
-                passSlot = parseInt(s);
-            }
-            console.assert(typeof(passSlot)!=='undefined',
-                    "only one slot in pass to merge");
-            //which carriers are on the wrong side of this slot?
-            let slotCs = {};
-            let haveKick = false;
-            function addKick(c, slot){
-                if(!(slot in slotCs)) slotCs[slot] = [c];
-                else slotCs[slot].push(c);
-                haveKick = true;
-            }
-            pass.carriers.forEach(function(c){
-                console.assert(c in carriers,
-                        "Carriers in Passes should also be in the carrier set.");
-                if(carriers[c].last !==null){ //only kick carriers not brought in
-                    let carrierSlot = slotNumber(carriers[c].last.needle);
-                    if(carriers[c].last.direction === DIRECTION_LEFT){
-                        //carrier is somewhere(1 'stopping distance, modulo racking)
-                        //left of carrierSlot
-                        //
-                        //strict version-> "infinite" stopping distance:
-                        if(pass.direction === DIRECTION_LEFT){
-                            addKick(c, carrierSlot);
-                        }else{
-                            if(carrierSlot>passSlot)
-                                addKick(c, passSlot);
-                        }
-                    }else{
-                        console.assert(carriers[c].last.direction===DIRECTION_RIGHT,
-                                "Carrier directions are only LEFT or RIGHT.");
-                        if(pass.direction === DIRECTION_RIGHT)
-                            addKick(c, carrierSlot);
-                        else{
-                            if(carrierSlot<passSlot)
-                                addKick(c, passSlot);
-                        }
-                    }
-                }
-            });
-
-            //if kicks are needed, do recursively
-            if(haveKick){
-                let d; //direction to kick carrier
-                if(pass.direction === DIRECTION_LEFT) d = DIRECTION_RIGHT;
-                else if(pass.direction === DIRECTION_RIGHT) d = DIRECTION_LEFT;
-                else console.assert(false,
-                        "Passes with carriers have either LEFT or RIGHT direction.");
-                for(let slot in slotCs){
-                    let info = {
-                        type:TYPE_KNIT_TUCK,
-                        slots:{},
-                        racking:racking,
-                        stitch:stitch,
-                        carriers:slotCs[slot],
-                        direction:d
-                    };
-                    info.slots[slot] = OP_SOFT_MISS;
-                    merge(new Pass(info), true);
-
-                    //update carrier last stitch info:
-                    slotCs[slot].forEach(function(c){
-                        carriers[c].last = {
-                            needle:new BedNeedle('f', parseInt(slot)),
-                            minDistance:MIN_STOPPING_DISTANCE,
-                            direction:d
-                        };
-                    });
-                }
-
-                merge(pass, true);
-                return;
-            }else{
-                //if no kicks, then append pass
-                passes.push(pass);
-            }
+            passes.push(pass);
         }
     }
 
@@ -904,49 +822,6 @@ function main(){
         });
     }
 
-    //if carriers not named in "cs" have last set, kick so they won't overlap n
-    function kickOthers(n, cs){
-        let ignore = {};
-        cs.forEach(function(c){
-            ignore[c] = true;
-        });
-        let needleSlot = slotNumber(n);
-        for(let c in carriers){
-            let carrier = carriers[c];
-            if(carrier.name in ignore) continue;
-            if(carrier.last === null) continue;
-            let carrierSlot = slotNumber(carrier.last.needle);
-            if(carrier.last.direction === DIRECTION_LEFT){
-                if(carrierSlot<=needleSlot) continue;
-                let info = {
-                    type:TYPE_KNIT_TUCK,
-                    slots:{},
-                    racking:racking,
-                    stitch:stitch,
-                    carriers:[carrier.name],
-                    direction:DIRECTION_RIGHT
-                };
-                info.slots[slotString(carrier.last.needle)] = OP_SOFT_MISS;
-                merge(new Pass(info));
-                carrier.last.direction = DIRECTION_RIGHT;
-            }else{
-                console.assert(carrier.last.direction===DIRECTION_RIGHT,
-                        "carriers direction must be LEFT or RIGHT");
-                if(carrierSlot>=needleSlot) continue;
-                let info = {
-                    type:TYPE_KNIT_TUCK,
-                    slots:{},
-                    racking:racking,
-                    stitch:stitch,
-                    carriers:[carrier.name],
-                    direction:DIRECTION_LEFT
-                };
-                info.slots[slotString(carrier.last.needle)] = OP_SOFT_MISS;
-                merge(new Pass(info));
-                carrier.last.direction = DIRECTION_LEFT;
-            }
-        }
-    }
 
     let lines = fs.readFileSync(knitoutFile, 'utf8').split("\n");
     (function checkVersion(){
@@ -1093,10 +968,6 @@ function main(){
                     d = DIRECTION_NONE; //miss and drop are directionless
             }
 
-            if(op !== 'miss'){
-                kickOthers(n, cs);
-            }
-
             let type;
             if(op === 'miss' && cs.length === 0){
                 type = TYPE_A_MISS;
@@ -1194,7 +1065,6 @@ function main(){
             if(cs.length === 0){
                 d = ""; //xfer is directionless
             }
-            kickOthers(n, cs);
 
             let info = {
                 type:type,
