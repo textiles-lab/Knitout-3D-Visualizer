@@ -413,67 +413,26 @@ function pointName(plane, needle, direction, carrier){
     //carrier should be some string or '' if 'f' or 'b' for plane
     //  console.assert(
 }
-
 //gets the necessary height to prevent intersections at the carrier level
-function getMaxHeight(minHeight, current, prev){
+function getMaxHeight(minHeight, needle1, needle2){
     let max = minHeight;
-    let lowerBound = Math.min(current, prev);
-    let upperBound = Math.max(current, prev);
+    let lowerBound = Math.min(needle1, needle2);
+    let upperBound = Math.max(needle1, needle2);
     for(let i = lowerBound; i<=upperBound; i++){
-        if(i!=prev && maxHeight[i]!=undefined && max<=maxHeight[i])
+        if(maxHeight[i]!='undefined' && max<=maxHeight[i])
             max = maxHeight[i]+epsilon;
     }
     return max;
 }
 
-//updates max height for the last two points of the previous stitch, given
-//lastNeedle, an object holding the needle specs; prevCarrierNeedle, an int
-//representing the index of maxHeight array that the last needle is represented
-//by; currentCarrierNeedle, the maxHeight index of the most recent stitch; and
-//x, the starting x coordinate of the current stitch.
-function setMaxHeight(x, currentCarrierNeedle, lastNeedle, prevCarrierNeedle){
-    let lowerBound = Math.min(currentCarrierNeedle, prevCarrierNeedle);
-    let upperBound = Math.max(currentCarrierNeedle, prevCarrierNeedle);
-
-    let max = maxHeight[prevCarrierNeedle];
-
-    //determine the needed height
+//updates max height for a range
+function setMaxHeight(needle1, needle2, newHeight){
+    let lowerBound = Math.min(needle1, needle2);
+    let upperBound = Math.max(needle1, needle2);
     for(let i = lowerBound; i<=upperBound; i++){
-        if(i!=currentCarrierNeedle && i!=prevCarrierNeedle){
-            let current = maxHeight[i];
-            if(current!==undefined && current>=max){
-                max = current+epsilon;
-            }
-        }
-    }
-
-    if(max!==undefined){
-        //set new maxHeight for all the slots that the yarn passes over
-        for(let j = lowerBound; j<=upperBound; j++){
-            if(j!=currentCarrierNeedle){
-                maxHeight[j] = max;
-            }
-        }
-
-        //shift the actual yarn up
-        if(lastNeedle!==undefined){
-            let specs = (lastNeedle.bed==='f' ? frontActiveRow : backActiveRow)
-                [lastNeedle.needle];
-            let info = yarn[specs.row];
-            info = (lastNeedle.bed==='f' ? info.floops : info.bloops);
-            info = info[lastNeedle.needle];
-
-            for(let i = 0; i<info.length; i++){
-                let pts = info[i].ctrlPts;
-                let last = pts.length-1;
-                pts[last-1][1] = max;
-                pts[last][1] = max;
-                //pts[last][0] = x TODO after fixing merge stuff
-            }
-        }
+        maxHeight[i] = newHeight;
     }
 }
-
 
 //gets yarn "height" of neighbors
 function neighborHeight(bed, needle){
@@ -522,22 +481,29 @@ function getCarrierNum(){
 
 //makes a list of points for a standard stitch
 function makeStitch(row, direction, bed, needle, carrier){
-    let c = parseInt(carrier);
-
     let info = [];
     let width = boxWidth-PADDING*2;
     let dx = width/5;
     let dy =  boxHeight/3;
     let dz = boxDepth/2;
     let padding = (direction==='-' ? -PADDING : PADDING);
-    let carrierDepth = CARRIERS+CARRIER_SPACING*c;
 
     let activeRow = (bed==='f' ? frontActiveRow : backActiveRow);
     let height = (activeRow[needle] ?
             minHeight(activeRow[needle], bed, needle)+boxSpacing
             : neighborHeight(bed, needle));
 
-    let start = [needle*(boxWidth+boxSpacing), height, carrierDepth];
+    let stackHeight = height;
+    let spaceNeedle = (direction==='-' ? needle : needle+1);
+
+    if(maxHeight[spaceNeedle] !=='undefined' && height<=maxHeight[spaceNeedle]){
+        stackHeight = maxHeight[spaceNeedle]+epsilon;
+    }
+    maxHeight[spaceNeedle] = stackHeight;
+
+    let carrierDepth = CARRIERS+CARRIER_SPACING*carrier;
+    let start = [needle*(boxWidth+boxSpacing), stackHeight, carrierDepth];
+
     if(direction === '-') dx*= -1;
     else start[0] -= boxWidth;
 
@@ -545,27 +511,11 @@ function makeStitch(row, direction, bed, needle, carrier){
         dz*=-1;
     }
 
-    let carrierNeedle = (direction==='-' ? needle : needle+1);
-    let prevNeedle;
-    if(lastNeedle!==undefined)
-        prevNeedle = (direction==='-' ? lastNeedle.needle : lastNeedle.needle+1);
-
-   // console.log(needle);
-    //console.log(lastNeedle);
-    //set previous last point, making sure to search heights
-    //setMaxHeight(start[0]-boxWidth, carrierNeedle, lastNeedle, prevNeedle);
-
-    let carrierHeight = (maxHeight[carrierNeedle]!==undefined ?
-            maxHeight[carrierNeedle]+epsilon : height);
-    maxHeight[carrierNeedle] = carrierHeight;
-
-
-
-
     let x = start[0];
     let y = start[1];
     let z = start[2];
 
+    y = height;
     z = (bed==='b' ? BACK_BED : FRONT_BED);
     info.push([x, y, z]);
 
@@ -614,11 +564,11 @@ function makeStitch(row, direction, bed, needle, carrier){
     x += padding;
     info.push([x, y, z]);
 
-    y = carrierHeight;
+    y = stackHeight;
     z = carrierDepth;
     info.push([x, y, z]);
 
-    x += (direction === '-' ? -boxSpacing : boxSpacing);
+    x+= (direction==='-' ? -boxSpacing : boxSpacing);
     info.push([x, y, z]);
 
     return info;
