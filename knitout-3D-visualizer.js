@@ -480,7 +480,7 @@ function getCarrierNum(){
 }
 
 //makes a list of points for a standard stitch
-function makeStitch(row, direction, bed, needle, carrier){
+function makeStitch(direction, bed, needle, carrier){
     let info = [];
     let width = boxWidth-PADDING*2;
     let dx = width/5;
@@ -599,9 +599,13 @@ function makeStitch(row, direction, bed, needle, carrier){
  *  -bed: the needle bed
  */
 
-function tuck(row, direction, bed, needle, carrier){
+function tuck(direction, bed, needle, carrier){
     let activeRow = (bed==='f' ? frontActiveRow : backActiveRow);
-    let info = makeStitch(row, direction, bed, needle, carrier);
+    let row = (lastNeedle===undefined ? 0 : lastNeedle.row);
+    if(lastNeedle!==undefined && lastNeedle.direction!==direction)
+        row++;
+
+    let info = makeStitch(direction, bed, needle, carrier);
     let newLoop = new loop(info, carrier);
     if(yarn[row]){
         let yarnLoops = (bed==='f' ? yarn[row].floops : yarn[row].bloops);
@@ -629,12 +633,16 @@ function tuck(row, direction, bed, needle, carrier){
     lastNeedle = {}
     lastNeedle.needle = needle;
     lastNeedle.bed = bed;
+    lastNeedle.direction = direction;
+    lastNeedle.row = row;
 }
 
-function knit(row, direction, bed, needle, carrier){
+function knit(direction, bed, needle, carrier){
     let activeRow = (bed==='f' ? frontActiveRow : backActiveRow);
-    let info = makeStitch(row, direction, bed, needle, carrier);
-
+    let info = makeStitch(direction, bed, needle, carrier);
+    let row = lastNeedle.row;
+    if(direction!==lastNeedle.direction)
+        row++;
     let newLoop = new loop(info, carrier);
     if(yarn[row]){
         let yarnLoops = (bed==='f' ? yarn[row].floops : yarn[row].bloops);
@@ -650,11 +658,12 @@ function knit(row, direction, bed, needle, carrier){
             newBloop[needle] = [newLoop];
         yarn[row] = new yarnPass(newFloop, newBloop, direction);
     }
-
     activeRow[needle] = new loopSpec(row);
     lastNeedle = {};
     lastNeedle.needle = needle;
     lastNeedle.bed = bed;
+    lastNeedle.direction = direction;
+    lastNeedle.row = row;
 }
 
 function xfer(fromSide, fromNeedle, toSide, toNeedle){
@@ -671,7 +680,7 @@ function xfer(fromSide, fromNeedle, toSide, toNeedle){
 
     let dx = (info[0].ctrlPts[2][0]-info[0].ctrlPts[1][0])/2;
     let direction = (dx<0 ? '-' : '+');
-    let updatedInfo = makeStitch(specs.row, direction, toSide, toNeedle,info[0].carrier);
+    let updatedInfo = makeStitch(direction, toSide, toNeedle,info[0].carrier);
 
     for(let i = 5; i<=10; i++){
         for(let j = 0; j<info.length; j++){
@@ -719,7 +728,6 @@ function makeTxt(){
         for(let col = 0; col<maxNeedle; col++){
             let needle = col;
             if(direction === '-') needle = maxNeedle-col-1;
-
             let loop = yarnRow.floops[needle];
             if(loop){
                 for(let i = 0; i<loop.length; i++){
@@ -838,7 +846,10 @@ function main(){
     let racking = 0.0; //starts centered
     let stitch = 5; //machine-specific stitch number
 
+    let row = 0;
+
     lines.forEach(function(line, lineIdx){
+        row++;
         let i = line.indexOf(';');
         if(i>=0) line = line.substr(0,i);
         let tokens = line.split(/[ ]+/);
@@ -862,6 +873,7 @@ function main(){
             op = 'split';
             args.unshift('+');
         }
+
 
         if(op === 'in' || op === 'inhook'){
             let cs = args;
@@ -888,31 +900,6 @@ function main(){
                 throw "ERROR: Can't releasehook on "+cs+
                     ", hook currently holds "+hook+".";
             }
-            let needPass = true;
-            if(passes.length>0){
-                let prev = passes[passes.length-1];
-                if(prev.type === TYPE_KNIT_TUCK && !('hook' in prev)
-                        &&prev.direction === hook.direction){
-                    prev.hook = HOOK_RELEASE;
-                    needPass = false;
-                }
-            }
-            if(needPass){
-                //an attempt to release hook on an empty pass
-                let info = {
-                    type:TYPE_KNIT_TUCK,
-                    direction:hook.direction,
-                    carriers:[],
-                    racking:racking,
-                    stitch:stitch,
-                    hook:HOOK_RELEASE,
-                    slots:{}
-                };
-                info.slots[slotString(carriers[cs[0]].last.needle)] =
-                    OP_SOFT_MISS;
-                passes.push(new Pass(info));
-            }
-            //hook is now empty
             hook = null;
         }else if (op === 'out' || op === 'outhook'){
             let cs = args;
@@ -937,19 +924,6 @@ function main(){
                     n = carriers[c].last.needle;
                 }
             });
-            let info = {
-                type:TYPE_KNIT_TUCK,
-                slots:{},
-                racking:racking,
-                stitch:stitch,
-                carriers:cs,
-                direction: DIRECTION_RIGHT,
-                gripper:GRIPPER_OUT
-            };
-            info.slots[slotString(n)] = OP_SOFT_MISS;
-
-            if(op === 'outhook') info.hook = HOOK_OUT;
-            merge(new Pass(info));
 
             //remove carriers from active set:
             cs.forEach(function(c){
@@ -988,19 +962,18 @@ function main(){
                 (n.isFront() ? OP_MISS_FRONT : OP_MISS_BACK);
             else if(op === 'tuck'){
                 if(n.isFront()){
-                    info.slots[slotString(n)] = {color: 11, isFront: true};
+                    tuck(d, 'f', n.needle, cs[0]);
                 }else{
-                    info.slots[slotString(n)] = {color:12, isBack:true};
+                    tuck(d, 'b', n.needle, cs[0]);
                 }
             }else if(op === 'knit'){
                 if(n.isFront()){
-                    info.slots[slotString(n)] = {color: 51, isFront: true};
+                    knit(d, 'f', n.needle, cs[0]);
                 }else{
-                    info.slots[slotString(n)] = {color:52, isBack:true};
+                    knit(d, 'b', n.needle, cs[0]);
                 }
             }else console.assert(false, "op was miss, tuck, or knit");
 
-            info.slots[slotString(n)].carrier = cs[0];
             handleIn(cs, info);
             merge(new Pass(info));
             setLast(cs, d, n);
@@ -1037,8 +1010,12 @@ function main(){
             //make sure this is a valid operation, and fill in proper OP
             if(n.isHook && t.isHook()){
                 if(cs.length === 0){
-                    type = TYPE_XFER;
-                    op = (n.isFront() ? OP_XFER_TO_BACK : OP_XFER_TO_FRONT);
+                    type= TYPE_XFER;
+                    if(n.isFront()){
+                        xfer('f', n.needle, 'b', t.needle);
+                    }else{
+                        xfer('b', n.needle, 'f', t.needle);
+                    }
                 }else{
                     type = TYPE_SPLIT;
                     op = (n.isFront() ? OP_SPLIT_TO_BACK : OP_SPLIT_TO_FRONT);
@@ -1074,7 +1051,6 @@ function main(){
                 carriers:cs,
                 direction:d
             };
-            info.slots[slotString(n)] = op;
 
             handleIn(cs, info);
             merge(new Pass(info));
@@ -1088,57 +1064,8 @@ function main(){
         }
     });
 
-    let minSlot = Infinity;
-    let maxSlot = -Infinity;
-    passes.forEach(function(pass){
-        for(let s in pass.slots){
-            let si = parseInt(s);
-            minSlot = Math.min(minSlot, si);
-            maxSlot = Math.max(maxSlot, si);
-        }
-    });
-    console.log("Slots lie in ["+minSlot+", "+maxSlot+"].");
-
-    let lastPass;
-    let row = 0;
-    passes.forEach(function(pass){
-        let direction;
-        let empty = true; //pass is all soft misses
-        for(let s in pass.slots){
-            let needle = parseInt(s);
-            let color = pass.slots[s].color;
-            let carrier = pass.slots[s].carrier;
-            direction = pass.direction;
-            if(color !==16) empty = false;
-
-            if(color == 11){
-                tuck(row, direction, 'f', needle, carrier);
-            }else if(color == 12){
-                tuck(row, direction, 'b', needle, carrier);
-            }else if(color == 51){
-                knit(row, direction, 'f', needle, carrier);
-            }else if(color == 52){
-                knit(row, direction, 'b', needle, carrier);
-            }else if(color == 30){
-                //xfer back to front
-                xfer('b', needle-pass.racking, 'f', needle);
-            }else if(color == 20){
-                //xfer front to back
-                xfer('f', needle, 'b', needle-pass.racking);
-            }
-            else if(color == 16){
-                //soft miss: do nothing?
-            }else{
-                console.log(color+": not yet implemented");
-            }
-        }
-        if (pass.type === TYPE_KNIT_TUCK && !empty){
-            row++;
-            lastPass = pass;
-        }
-    });
     makeTxt();
-    if(lastPass!=undefined){
+  /*  if(lastPass!=undefined){
         lastPass.carriers.forEach(function(c){
             if(c in carriers){
                 let lastNeedle = parseInt(carriers[c].last.needle.needle);
@@ -1172,7 +1099,7 @@ function main(){
             }
         });
     }
-
+*/
 }
 
 main();
