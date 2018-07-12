@@ -28,7 +28,6 @@ var lastNeedle;
 //stores current "highest" yarn in the transfer area at the end of each stitch
 var maxHeight = [];
 var pointHeight = {};
-var passes = [];
 var carriers = [];
 
 var boxWidth = 1;
@@ -384,7 +383,6 @@ function yarnPass(floops, bloops, direction){
 //the object in the "yarn" array
 function loopSpec(row){
     this.row = row;
-    this.n = 1;
 }
 
 
@@ -436,6 +434,7 @@ function setMaxHeight(needle1, needle2, newHeight){
 
 //gets yarn "height" of neighbors
 function neighborHeight(bed, needle){
+    let max = 0;
     let left = needle-1;
     let right = needle-1;
     let activeRow = (bed==='f' ? frontActiveRow : backActiveRow);
@@ -444,8 +443,10 @@ function neighborHeight(bed, needle){
             if(activeRow[left]){
                 let row = activeRow[left].row;
                 if((bed==='f' && yarn[row].floops[left])
-                        ||(bed==='b' && yarn[row].bloops[left]))
-                    return minHeight(activeRow[left], bed, left);
+                        ||(bed==='b' && yarn[row].bloops[left])){
+                    max = Math.max(max, minHeight(activeRow[left], bed, left));
+                    left = -1;
+                }
             }
             left--;
         }
@@ -453,13 +454,15 @@ function neighborHeight(bed, needle){
             if(activeRow[right]){
                 let row = activeRow[right].row;
                 if((bed==='f'&& yarn[row].floops[right])
-                        ||(bed==='b'&&yarn[row].bloops[right]))
-                    return minHeight(activeRow[right], bed, right);
+                        ||(bed==='b'&&yarn[row].bloops[right])){
+                    max = Math.max(max, minHeight(activeRow[right], bed, right));
+                    right = activeRow.length;
+                }
             }
             right++;
         }
     }
-    return 0;
+    return max;
 }
 
 //gets lowest "height" of a stitch on a certain active needle
@@ -489,10 +492,9 @@ function makeStitch(direction, bed, needle, carrier){
     let padding = (direction==='-' ? -PADDING : PADDING);
 
     let activeRow = (bed==='f' ? frontActiveRow : backActiveRow);
-    let height = (activeRow[needle] ?
+    let height = (activeRow[needle] !== undefined ?
             minHeight(activeRow[needle], bed, needle)+boxSpacing
             : neighborHeight(bed, needle));
-
     let stackHeight = height;
     let spaceNeedle = (direction==='-' ? needle : needle+1);
 
@@ -628,7 +630,6 @@ function tuck(direction, bed, needle, carrier){
         activeRow[needle] = new loopSpec(row);
     }else{
         activeRow[needle].row = [row];
-        activeRow[needle].n++;
     }
     lastNeedle = {}
     lastNeedle.needle = needle;
@@ -646,8 +647,6 @@ function knit(direction, bed, needle, carrier){
     let newLoop = new loop(info, carrier);
     if(yarn[row]){
         let yarnLoops = (bed==='f' ? yarn[row].floops : yarn[row].bloops);
-        console.assert(!yarnLoops[needle],
-                "same row same spot shouldn't be able to have two knits");
         yarnLoops[needle] = [newLoop];
     }else{
         let newFloop = [];
@@ -681,26 +680,36 @@ function xfer(fromSide, fromNeedle, toSide, toNeedle){
     let dx = (info[0].ctrlPts[2][0]-info[0].ctrlPts[1][0])/2;
     let direction = (dx<0 ? '-' : '+');
     let updatedInfo = makeStitch(direction, toSide, toNeedle,info[0].carrier);
+    let height = (toActiveRow[toNeedle] ?
+            minHeight(toActiveRow[toNeedle], toSide, toNeedle)
+            : minHeight(fromActiveRow[fromNeedle], fromSide, fromNeedle));
+    let dy  = height - updatedInfo[1][1];
 
-    for(let i = 5; i<=10; i++){
+    for(let i = 4; i<=9; i++){
         for(let j = 0; j<info.length; j++){
-            let x = updatedInfo[i][0]-epsilon;
-            let y = updatedInfo[i][1]-epsilon;
-            let z = updatedInfo[i][2]-epsilon;
+            let x = updatedInfo[i][0];
+            let y = updatedInfo[i][1]-epsilon+dy;
+            let z = updatedInfo[i][2];
             info[j].ctrlPts[i] = [x, y, z];
         }
     }
-
-    if(toActiveRow[toNeedle]){
-        toActiveRow[toNeedle].n += fromActiveRow[fromNeedle].n;
-    }else{
-        toActiveRow[toNeedle] = new loopSpec(fromActiveRow[fromNeedle].row);
-        toActiveRow[toNeedle].n = fromActiveRow[fromNeedle].n;
+    let fromRow = specs.row;
+    let toRow = fromRow;//+1;
+    if(toActiveRow[toNeedle]===undefined){
+        toActiveRow[toNeedle] = new loopSpec(toRow);
     }
 
-    let destRow = yarn[toActiveRow[toNeedle].row];
+    let destRow = yarn[toRow];
+    if(yarn[toRow] === undefined){
+        let newFloop = [];
+        let newBloop = [];
+        yarn[toRow] = new yarnPass(newFloop, newBloop, yarn[fromRow].direction);
+        destRow = yarn[toRow];
+    }
+
     let destination = (toSide==='f' ? destRow.floops[toNeedle]
             : destRow.bloops[toNeedle]);
+
     for(let i = 0; i<info.length; i++){
         let newLoop = new loop(info[i].ctrlPts.slice(), info[i].carrier);
         if(destination){
@@ -717,6 +726,8 @@ function xfer(fromSide, fromNeedle, toSide, toNeedle){
     }
     info = undefined;
     fromActiveRow[fromNeedle] = undefined;
+    if(fromSide==='f') yarn[fromRow].floops[fromNeedle] = undefined;
+    else yarn[fromRow].bloops[fromNeedle] = undefined;
 }
 
 function makeTxt(){
@@ -804,19 +815,6 @@ function main(){
             }else{
                 console.assert(false, "inInfo.op must be 'in' or 'inhook'.");
             }
-        }
-    }
-
-    /*
-     * currently it seems like the visualizer is fine without merging and just
-     * pushing the new pass onto passes. Haven't tested enough to feel safe just
-     * removing all calls to merge though.
-     */
-    function merge(pass, shouldNotKick) {
-        if(passes.length !== 0 && passes[passes.length-1].append(pass)){
-            //merged fine
-        }else{
-            passes.push(pass);
         }
     }
 
@@ -975,7 +973,6 @@ function main(){
             }else console.assert(false, "op was miss, tuck, or knit");
 
             handleIn(cs, info);
-            merge(new Pass(info));
             setLast(cs, d, n);
         } else if(op === 'rack'){
             if(args.length !== 1) throw "ERROR: racking takes one argument";
@@ -1053,7 +1050,7 @@ function main(){
             };
 
             handleIn(cs, info);
-            merge(new Pass(info));
+
             setLast(cs, d, n);
         }else if(op === 'pause'){
             //no pauses for this
