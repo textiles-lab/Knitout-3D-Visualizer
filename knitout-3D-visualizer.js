@@ -513,6 +513,25 @@ function makeStitch(direction, bed, needle, carrier){
         dz*=-1;
     }
 
+    if(lastNeedle!==undefined){
+        //get max height since last needle
+        /* let needle1 = (direction==='-' ? spaceNeedle+1 : spaceNeedle-1);
+        let needle2 = (direction==='-' ? lastNeedle.needle : lastNeedle.needle+1);
+        getMaxHeight(needle1, needle2);
+        */
+
+        //update last stitch
+        let toUpdate = (lastNeedle.bed==='f'?
+                yarn[lastNeedle.row].floops[lastNeedle.needle]
+                : yarn[lastNeedle.row].bloops[lastNeedle.needle]);
+        toUpdate = toUpdate[toUpdate.length-1].ctrlPts;
+        let lastPt = toUpdate.length-1;
+        toUpdate[lastPt][0] = start[0];
+
+        //set maxheight in between needles
+    }
+
+
     let x = start[0];
     let y = start[1];
     let z = start[2];
@@ -575,23 +594,6 @@ function makeStitch(direction, bed, needle, carrier){
 
     return info;
 }
-
-//wrapper for makeStitch for xfers, because xfer handles heights differently
-/*function makeXferStitch(row, direction, fromSide, fromNeedle, toSide, toNeedle,
-  carrier){
-  let info = makeStitch(row, direction, toSide, toNeedle, carrier);
-  let fromActiveRow = (fromSide==='f' ? frontActiveRow : backActiveRow);
-  let toActiveRow = (toSide==='f' ? frontActiveRow : backActiveRow);
-  let height = (toActiveRow[toNeedle] ?
-  minHeight(toActiveRow[fromNeedle], fromSide, fromNeedle)
-  : neighborHeight(fromSide, fromNeedle));
-
-  console.log(info);
-  for(let i = 0; i<info.length; i++){
-
-  }
-  return info;
-  }*/
 
 
 /*basic knitout functions
@@ -724,6 +726,14 @@ function xfer(fromSide, fromNeedle, toSide, toNeedle){
                 destRow.bloops[toNeedle] = [newLoop];
         }
     }
+    if(lastNeedle.needle === fromNeedle
+            && lastNeedle.bed === fromSide
+            && lastNeedle.row === fromRow){
+        lastNeedle.needle = toNeedle;
+        lastNeedle.bed = toSide;
+        lastNeedle.row = toRow;
+    }
+
     info = undefined;
     fromActiveRow[fromNeedle] = undefined;
     if(fromSide==='f') yarn[fromRow].floops[fromNeedle] = undefined;
