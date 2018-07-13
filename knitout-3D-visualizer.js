@@ -498,13 +498,9 @@ function makeStitch(direction, bed, needle, carrier){
     let stackHeight = height;
     let spaceNeedle = (direction==='-' ? needle : needle+1);
 
-    if(maxHeight[spaceNeedle] !=='undefined' && height<=maxHeight[spaceNeedle]){
-        stackHeight = maxHeight[spaceNeedle]+epsilon;
-    }
-    maxHeight[spaceNeedle] = stackHeight;
 
     let carrierDepth = CARRIERS+CARRIER_SPACING*carrier;
-    let start = [needle*(boxWidth+boxSpacing), stackHeight, carrierDepth];
+    let start = [needle*(boxWidth+boxSpacing), height, carrierDepth];
 
     if(direction === '-') dx*= -1;
     else start[0] -= boxWidth;
@@ -515,28 +511,49 @@ function makeStitch(direction, bed, needle, carrier){
 
     if(lastNeedle!==undefined){
         //get max height since last needle
-        /* let needle1 = (direction==='-' ? spaceNeedle+1 : spaceNeedle-1);
-        let needle2 = (direction==='-' ? lastNeedle.needle : lastNeedle.needle+1);
-        getMaxHeight(needle1, needle2);
-        */
+        let n1 = (direction==='-' ? spaceNeedle+1 : spaceNeedle-1);
+        let n2 = (lastNeedle.direction==='-' ?
+                lastNeedle.needle : lastNeedle.needle+1);
+        let upperBound = Math.max(n1, n2);
+        let lowerBound = Math.min(n1, n2);
 
-        //update last stitch
         let toUpdate = (lastNeedle.bed==='f'?
                 yarn[lastNeedle.row].floops[lastNeedle.needle]
                 : yarn[lastNeedle.row].bloops[lastNeedle.needle]);
         toUpdate = toUpdate[toUpdate.length-1].ctrlPts;
         let lastPt = toUpdate.length-1;
+
+        let carrierHeight = toUpdate[lastPt][1];
+        let raised = false;
+        for(let i = lowerBound; i<=upperBound; i++){
+            if(i!==n2 && maxHeight[i]>=carrierHeight){
+                raised = true;
+                carrierHeight = maxHeight[i];
+            }
+        }
+        if(raised) carrierHeight+=epsilon;
+
+        //update last stitch
         toUpdate[lastPt][0] = start[0];
+        toUpdate[lastPt][1] = carrierHeight;
+        toUpdate[lastPt-1][1] = carrierHeight;
 
         //set maxheight in between needles
+        for(let i = lowerBound; i<=upperBound; i++){
+            maxHeight[i] = carrierHeight;
+        }
     }
+
+    if(maxHeight[spaceNeedle] !=='undefined' && height<=maxHeight[spaceNeedle]){
+        stackHeight = maxHeight[spaceNeedle]+epsilon;
+    }
+    maxHeight[spaceNeedle] = stackHeight;
 
 
     let x = start[0];
     let y = start[1];
     let z = start[2];
 
-    y = height;
     z = (bed==='b' ? BACK_BED : FRONT_BED);
     info.push([x, y, z]);
 

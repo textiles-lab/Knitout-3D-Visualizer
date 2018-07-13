@@ -5,4 +5,3 @@ stitch 20 25
 tuck - f4 6
 tuck - f2 6
 tuck + b1 6
-tuck + b3 6
