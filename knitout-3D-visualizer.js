@@ -28,7 +28,7 @@ var lastNeedle;
 //stores current "highest" yarn in the transfer area at the end of each stitch
 var maxHeight = [];
 var pointHeight = {};
-var carriers = [];
+var allCarriers = [];
 
 var boxWidth = 1;
 var boxHeight = 1;
@@ -403,14 +403,78 @@ function errorHandler(err, data){
     if(err) return console.error(err);
 }
 
-
-function pointName(plane, needle, direction, carrier){
-    //planes should be 'f' or 'b' or 'c-*'
-    //needle should be int
-    //direction should be '+' or '-' or '' if 'f' or 'b' for plane
-    //carrier should be some string or '' if 'f' or 'b' for plane
-    //  console.assert(
+//converts a carrier string to a set number
+function getCarrierNum(cs){
+    console.log(allCarriers);
+    for(let i = 0; i<allCarriers.length;i++){
+        if(allCarriers[i] == cs)
+            return i;
+    }
+    console.assert(false, "Tried to access a non-active carrier.");
 }
+
+/*
+ * okay so right now I should be implementing horizons per carrier per side of each
+ * needle. Why again? hmmm. I think this would help prevent collisions for plating.
+ * Is there any other reason?
+ * TODO
+ *  -variables to array index function
+ *  -restore horizons
+ *  -redo search
+ */
+function pointName(plane, direction, needle, carrier){
+    //planes should be 'f' or 'b' or 'c'
+    //needle should be int
+    //direction should be '+' or '-' if 'f' or 'b' for plane
+    //carrier should be some string if 'f' or 'b' for plane
+    console.assert(plane==='f'||plane==='b'||plane==='c',
+            "'plane' field must be 'f', 'b', or 'c'.");
+    console.assert(typeof(needle) == 'number', "'needle' field must be a number.");
+    if(plane==='f' || plane==='b'){
+        console.assert(direction==='+'||direction==='-',
+                "'direction' field can only be '-' or '+'");
+        console.assert(typeof(carrier) == 'string',
+                "'carrier' field must be a string.");
+    }
+
+    let index = 0;
+    let c = allCarriers.length;
+
+    //each needle occupies 4c+1 indices.
+    //c spots on the left and right of each needle
+    //front and back versions of each needle
+    //and then c indices, one for each carrier for the carrier depth.
+
+    index+=needle*(5*c);
+
+    if(plane==='b')
+        index+=(3*c);
+    else if(plane==='c')
+        index+=2*c;
+
+    if(plane!=='c'&&direction==='+')
+        index+=c;
+
+    index+=allCarriers.indexOf(carrier);
+
+
+    return index;
+}
+
+function indexTests(){
+    console.log(pointName('f', '-', 9,'6'));
+    console.log(pointName('f', '-', 9,'8'));
+    console.log(pointName('f', '+', 9,'6'));
+    console.log(pointName('f', '+', 9,'8'));
+    console.log(pointName('c', '+', 9,'6'));
+    console.log(pointName('c', '+', 9,'8'));
+    console.log(pointName('b', '-', 9,'6'));
+    console.log(pointName('b', '-', 9,'8'));
+    console.log(pointName('b', '+', 9,'6'));
+    console.log(pointName('b', '+', 9,'8'));
+    console.log(pointName('f', '-', 10,'6'));
+}
+
 //gets the necessary height to prevent intersections at the carrier level
 function getMaxHeight(minHeight, needle1, needle2){
     let max = minHeight;
@@ -475,11 +539,6 @@ function minHeight(needleSpec, bed, needle){
         min = Math.min(min, loops[i].ctrlPts[1][1]);
     }
     return min;
-}
-
-//converts a carrier string to a set number
-function getCarrierNum(){
-    //TODO
 }
 
 //makes a list of points for a standard stitch
@@ -911,8 +970,10 @@ function main(){
             });
 
             let inInfo = {op:op, cs:cs.slice()};
+
             //mark all carriers as pending
             cs.forEach(function(c){
+                allCarriers.push(c);
                 let carrier = new Carrier(c);
                 carrier.in = inInfo;
                 carriers[c] = carrier;
@@ -987,6 +1048,7 @@ function main(){
                 (n.isFront() ? OP_MISS_FRONT : OP_MISS_BACK);
             else if(op === 'tuck'){
                 if(n.isFront()){
+                    console.log(cs);
                     tuck(d, 'f', n.needle, cs[0]);
                 }else{
                     tuck(d, 'b', n.needle, cs[0]);
@@ -1089,41 +1151,42 @@ function main(){
     });
 
     makeTxt();
-  /*  if(lastPass!=undefined){
+    /*  if(lastPass!=undefined){
         lastPass.carriers.forEach(function(c){
-            if(c in carriers){
-                let lastNeedle = parseInt(carriers[c].last.needle.needle);
-                let bed = carriers[c].last.needle.bed;
-                let activeRow = (bed==='f' ? frontActiveRow : backActiveRow);
-                let direction = lastPass.direction;
+        if(c in carriers){
+        let lastNeedle = parseInt(carriers[c].last.needle.needle);
+        let bed = carriers[c].last.needle.bed;
+        let activeRow = (bed==='f' ? frontActiveRow : backActiveRow);
+        let direction = lastPass.direction;
 
-                let height = (activeRow[lastNeedle] ?
-                        minHeight(activeRow[lastNeedle], bed, lastNeedle)
-                        : neighborHeight(bed, lastNeedle));
+        let height = (activeRow[lastNeedle] ?
+        minHeight(activeRow[lastNeedle], bed, lastNeedle)
+        : neighborHeight(bed, lastNeedle));
 
-                lastNeedle += (direction==='+' ? 1 : -1);
+        lastNeedle += (direction==='+' ? 1 : -1);
 
-                //yarn going to the carrier
-                let xstart = lastNeedle*(boxWidth+boxSpacing)+PADDING;
-                let dx = boxWidth/6;
-                let dy = boxHeight/4;
-                let carrierDepth = CARRIERS+CARRIER_SPACING*c;
-                let start = [xstart, height, carrierDepth];
-                stream.write(format(start[0], start[1], start[2]));
+    //yarn going to the carrier
+    let xstart = lastNeedle*(boxWidth+boxSpacing)+PADDING;
+    let dx = boxWidth/6;
+    let dy = boxHeight/4;
+    let carrierDepth = CARRIERS+CARRIER_SPACING*c;
+    let start = [xstart, height, carrierDepth];
+    stream.write(format(start[0], start[1], start[2]));
 
-                //carrier
-                stream.write("c "+format(start[0], start[1], start[2]));
+    //carrier
+    stream.write("c "+format(start[0], start[1], start[2]));
 
-                start[0]-=dx;
-                start[1]+=dy;
-                stream.write("c "+format(start[0], start[1], start[2]));
+    start[0]-=dx;
+    start[1]+=dy;
+    stream.write("c "+format(start[0], start[1], start[2]));
 
-                start[0]+=2*dx;
-                stream.write("c "+format(start[0], start[1], start[2]));
-            }
-        });
+    start[0]+=2*dx;
+    stream.write("c "+format(start[0], start[1], start[2]));
     }
-*/
+    });
+    }
+    */
 }
 
 main();
+
