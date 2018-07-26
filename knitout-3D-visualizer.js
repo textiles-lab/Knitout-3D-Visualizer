@@ -137,7 +137,7 @@ function BedNeedle(bed, needle) {
         this.bed = m[1];
         this.needle = parseInt(m[2]);
     } else if (arguments.length == 2 && typeof(arguments[0]) === "string"
-            && typeof(arguments[1]) === "number") {
+        && typeof(arguments[1]) === "number") {
         this.bed = arguments[0];
         this.needle = arguments[1];
     } else {
@@ -191,9 +191,9 @@ function Pass(info){
     //hook: one of the HOOK_* constants or undefined
     //gripper: one of the GRIPPER_* constants or undefined
     ['type', 'slots', 'direction', 'carriers', 'hook', 'gripper', 'racking',
-    'stitch', 'speed', 'presserMode'].forEach(function(name){
-        if (name in info) this[name] = info[name];
-    }, this);
+        'stitch', 'speed', 'presserMode'].forEach(function(name){
+            if (name in info) this[name] = info[name];
+        }, this);
     if(!('carriers' in this))this.carriers = [];
     //check specs
     console.assert('type' in this, "Can't specify a pass without a type.");
@@ -203,53 +203,53 @@ function Pass(info){
     if(this.type === TYPE_KNIT_TUCK){
         if('gripper' in this){
             console.assert(this.carriers.length!==0,
-                    "Using GRIPPER_* with no carriers doesn't make sense.");
+                "Using GRIPPER_* with no carriers doesn't make sense.");
             if(this.gripper === GRIPPER_IN)
                 console.assert(!('hook' in this) || this.hook===HOOK_IN,
-                        "Must use GRIPPER_IN with HOOK_IN.");
+                    "Must use GRIPPER_IN with HOOK_IN.");
             else if(this.gripper === GRIPPER_OUT)
                 console.assert(!('hook' in this) || this.hook===HOOK_OUT,
-                        "Must use GRIPPER_OUT with HOOK_OUT.");
+                    "Must use GRIPPER_OUT with HOOK_OUT.");
             else
                 console.assert(false,
-                        "Pass gripper must be one of the GRIPPER_* constants.");
+                    "Pass gripper must be one of the GRIPPER_* constants.");
         }
         if('hook' in this){
             if(this.hook === HOOK_IN){
                 console.assert(this.carriers.length!==0,
-                        "Using HOOK_IN with no carriers doesn't make sense.");
+                    "Using HOOK_IN with no carriers doesn't make sense.");
             }else if(this.hook === HOOK_RELEASE){
                 //HOOK_RELEASE can work with any carriers
             }else if(this.hook === HOOK_OUT){
                 console.assert(this.carriers.length!==0,
-                        "Using HOOK_OUT with no carriers doesn't make sense.");
+                    "Using HOOK_OUT with no carriers doesn't make sense.");
             }else{
                 console.assert(false,
-                        "Pass hook must be one of the HOOK_* constants.");
+                    "Pass hook must be one of the HOOK_* constants.");
             }
         }
     }else if(this.type === TYPE_SPLIT) {
         console.assert(!('gripper' in this),
-                "Must use gripper enly on KNIT_TUCK pass.");
+            "Must use gripper enly on KNIT_TUCK pass.");
         console.assert(!('hook' in this),
-                "Must use hook only on KNIT_TUCK pass.");
+            "Must use hook only on KNIT_TUCK pass.");
         console.assert(this.carrers.length>0,
-                "Split passes should have yarn.");
+            "Split passes should have yarn.");
     }else if(this.type === TYPE_XFER || this.type === TYPE_XFER_TOSLIDERS
-            || this.type === TYPE_XFER_FROM_SLIDERS){
+        || this.type === TYPE_XFER_FROM_SLIDERS){
         console.assert(!('gripper' in this),
-                "Must use gripper only on KNIT_TUCK pass.");
+            "Must use gripper only on KNIT_TUCK pass.");
         console.assert(!('hook' in this),
-                "Must use gripper only on KNIT_TUCK pass.");
+            "Must use gripper only on KNIT_TUCK pass.");
         console.assert(this.carriers.length === 0,
-                "Transfer passes cannot have carriers specified.");
+            "Transfer passes cannot have carriers specified.");
     }else{
         console.assert(false, "Pass type must be on of the TYPE_* constants.");
     }
 }
 Pass.prototype.hasFront = function(){
     console.assert(this.type === TYPE_KNIT_TUCK,
-            "It only makes sense for knit-tuck passes to have front stitches.");
+        "It only makes sense for knit-tuck passes to have front stitches.");
     for(let s in this.slots){
         if('isFront' in this.slots[s]) return true;
     }
@@ -257,7 +257,7 @@ Pass.prototype.hasFront = function(){
 };
 Pass.prototype.hasBack = function(){
     console.assert(this.type === TYPE_KNIT_TUCK,
-            "It only makes sense for knit-tuck passes to have back stitches.");
+        "It only makes sense for knit-tuck passes to have back stitches.");
     for(let s in this.slots){
         if('isBack' in this.slots[s]) return true;
     }
@@ -275,7 +275,7 @@ Pass.prototype.append = function(pass){
     }else if(this.hook === HOOK_IN && !('hook' in pass)){
         //in at start of current pass is fine
     }else if(!('hook' in this) &&
-            (pass.hook === HOOK_OUT||pass.hook===HOOK_RELEASE)){
+        (pass.hook === HOOK_OUT||pass.hook===HOOK_RELEASE)){
         //out or release at the end of the next pass is fine
     }else{
         return false;
@@ -302,7 +302,7 @@ Pass.prototype.append = function(pass){
                 return false;
             else if(s===max){
                 if(merge_ops(this.slots[s], pass.slots[s], quarterPitch)
-                        === null){
+                    === null){
                     return false;
                 }
             }
@@ -318,20 +318,20 @@ Pass.prototype.append = function(pass){
                 return false;
             }else if(s===min){
                 if(merge_ops(pass.slots[s], this.slots[s], quarterPitch)
-                        === null){
+                    === null){
                     return false;
                 }
             }
         }
     }else{
         console.assert(this.direction === DIRECTION_NONE,
-                "'"+this.direction+"' must be a DIRECTION_* constant.");
+            "'"+this.direction+"' must be a DIRECTION_* constant.");
         for(let s in pass.slots){
             if(s in this.slots){
                 if(merge_ops(this.slots[s], pass.slots[s], quarterPitch)
-                        ===null
-                        &&merge_ops(pass.slot[s], this.slot[s], quarterPitch)
-                        ===null){
+                    ===null
+                    &&merge_ops(pass.slot[s], this.slot[s], quarterPitch)
+                    ===null){
                     return false;
                 }
             }
@@ -358,7 +358,7 @@ Pass.prototype.append = function(pass){
                     merge_ops(pass.slots[s], this.slots[s], quarterPitch);
             }else{
                 console.assert(this.direction === DIRECTION_NONE,
-                        "Direction must a DIRECTION_* constants");
+                    "Direction must a DIRECTION_* constants");
                 let op = merge_ops(this.slots[s],pass.slots[s],quarterPitch);
                 if(op===null)
                     op = merge_ops(pass.slots[s],pass.slots[s],quarterPitch);
@@ -414,27 +414,19 @@ function getCarrierNum(cs){
     console.assert(false, "Tried to access a non-active carrier.");
 }
 
-/*
- * okay so right now I should be implementing horizons per carrier per side of each
- * needle. Why again? hmmm. I think this would help prevent collisions for plating.
- * Is there any other reason?
- * TODO
- *  -restore horizons
- *  -redo search
- */
 function pointName(plane, direction, needle, carrier){
     //planes should be 'f' or 'b' or 'c'
     //needle should be int
     //direction should be '+' or '-' if 'f' or 'b' for plane
     //carrier should be some string if 'f' or 'b' for plane
     console.assert(plane==='f'||plane==='b'||plane==='c',
-            "'plane' field must be 'f', 'b', or 'c'.");
+        "'plane' field must be 'f', 'b', or 'c'.");
     console.assert(typeof(needle) == 'number', "'needle' field must be a number.");
     if(plane==='f' || plane==='b'){
         console.assert(direction==='+'||direction==='-',
-                "'direction' field can only be '-' or '+'");
+            "'direction' field can only be '-' or '+'");
         console.assert(typeof(carrier) == 'string',
-                "'carrier' field must be a string.");
+            "'carrier' field must be a string.");
     }
 
     let index = 0;
@@ -507,7 +499,7 @@ function neighborHeight(bed, needle){
             if(activeRow[left]){
                 let row = activeRow[left].row;
                 if((bed==='f' && yarn[row].floops[left])
-                        ||(bed==='b' && yarn[row].bloops[left])){
+                    ||(bed==='b' && yarn[row].bloops[left])){
                     max = Math.max(max, minHeight(activeRow[left], bed, left));
                     left = -1;
                 }
@@ -518,7 +510,7 @@ function neighborHeight(bed, needle){
             if(activeRow[right]){
                 let row = activeRow[right].row;
                 if((bed==='f'&& yarn[row].floops[right])
-                        ||(bed==='b'&&yarn[row].bloops[right])){
+                    ||(bed==='b'&&yarn[row].bloops[right])){
                     max = Math.max(max, minHeight(activeRow[right], bed, right));
                     right = activeRow.length;
                 }
@@ -534,7 +526,7 @@ function minHeight(needleSpec, bed, needle){
 
     let min = Infinity;
     let loops = (bed==='f' ? yarn[needleSpec.row].floops[needle]
-            : yarn[needleSpec.row].bloops[needle]);
+        : yarn[needleSpec.row].bloops[needle]);
     for(let i = 0; i<loops.length; i++){
         min = Math.min(min, loops[i].ctrlPts[1][1]);
     }
@@ -567,8 +559,8 @@ function makeStitch(direction, bed, needle, carrier, height){
     }
 
     if(lastNeedle!==undefined){
-    //get max height since last needle
-    //I think, for this just getting the carrier level horizons is fine.
+        //get max height since last needle
+        //I think, for this just getting the carrier level horizons is fine.
         //maxheight index of the current stitch
         let n1 = needle;
         let LorR1 = (needle>lastNeedle.needle ? '-' : '+');
@@ -586,8 +578,8 @@ function makeStitch(direction, bed, needle, carrier, height){
         let lowerBound = Math.min(index1, index2);
 
         let toUpdate = (lastNeedle.bed==='f'?
-                yarn[lastNeedle.row].floops[lastNeedle.needle]
-                : yarn[lastNeedle.row].bloops[lastNeedle.needle]);
+            yarn[lastNeedle.row].floops[lastNeedle.needle]
+            : yarn[lastNeedle.row].bloops[lastNeedle.needle]);
         toUpdate = toUpdate[toUpdate.length-1].ctrlPts;
         let lastPt = toUpdate.length-1;
 
@@ -716,8 +708,8 @@ function tuck(direction, bed, needle, carrier){
         row++;
 
     let height = (activeRow[needle] !== undefined ?
-            minHeight(activeRow[needle], bed, needle)+boxSpacing
-            : neighborHeight(bed, needle));
+        minHeight(activeRow[needle], bed, needle)//+boxSpacing
+        : neighborHeight(bed, needle));
 
     let info = makeStitch(direction, bed, needle, carrier, height);
     let newLoop = new loop(info, carrier);
@@ -754,8 +746,8 @@ function tuck(direction, bed, needle, carrier){
 function knit(direction, bed, needle, carrier){
     let activeRow = (bed==='f' ? frontActiveRow : backActiveRow);
     let height = (activeRow[needle] !== undefined ?
-            minHeight(activeRow[needle], bed, needle)+boxSpacing
-            : neighborHeight(bed, needle));
+        minHeight(activeRow[needle], bed, needle)+boxSpacing
+        : neighborHeight(bed, needle));
 
     let info = makeStitch(direction, bed, needle, carrier, height);
     let row = lastNeedle.row;
@@ -793,13 +785,13 @@ function xfer(fromSide, fromNeedle, toSide, toNeedle){
 
     let specs = fromActiveRow[fromNeedle];
     let info = (fromSide==='f' ? yarn[specs.row].floops[fromNeedle]
-            : yarn[specs.row].bloops[fromNeedle]);
+        : yarn[specs.row].bloops[fromNeedle]);
 
     let dx = (info[0].ctrlPts[2][0]-info[0].ctrlPts[1][0])/2;
     let direction = (dx<0 ? '-' : '+');
     let height = (toActiveRow[toNeedle] ?
-            minHeight(toActiveRow[toNeedle], toSide, toNeedle)
-            : minHeight(fromActiveRow[fromNeedle], fromSide, fromNeedle));
+        minHeight(toActiveRow[toNeedle], toSide, toNeedle)
+        : minHeight(fromActiveRow[fromNeedle], fromSide, fromNeedle));
     let updatedInfo = makeStitch(direction, toSide, toNeedle,info[0].carrier, height);
 
     for(let i = 5; i<=10; i++){
@@ -825,7 +817,7 @@ function xfer(fromSide, fromNeedle, toSide, toNeedle){
     }
 
     let destination = (toSide==='f' ? destRow.floops[toNeedle]
-            : destRow.bloops[toNeedle]);
+        : destRow.bloops[toNeedle]);
 
     for(let i = 0; i<info.length; i++){
         let newLoop = new loop(info[i].ctrlPts.slice(), info[i].carrier);
@@ -842,8 +834,8 @@ function xfer(fromSide, fromNeedle, toSide, toNeedle){
         }
     }
     if(lastNeedle.needle === fromNeedle
-            && lastNeedle.bed === fromSide
-            && lastNeedle.row === fromRow){
+        && lastNeedle.bed === fromSide
+        && lastNeedle.row === fromRow){
         lastNeedle.needle = toNeedle;
         lastNeedle.bed = toSide;
         lastNeedle.row = toRow;
@@ -949,7 +941,7 @@ function main(){
         cs.forEach(function(c){
             console.assert(c in carriers, "carrier not in carrier set");
             carriers[c].last =
-            {needle:n, direction:d, minDistance:MIN_STOPPING_DISTANCE};
+                {needle:n, direction:d, minDistance:MIN_STOPPING_DISTANCE};
         });
     }
 
@@ -961,7 +953,7 @@ function main(){
             throw "File does not start with knitout magic string";
         if(parseInt(m[1])>2)
             console.warn("WARNING: File is version "+m[1]
-                    +", but this code only knows about versions up to 2.");
+                +", but this code only knows about versions up to 2.");
     })();
 
     function getCarriers(line){
@@ -1199,41 +1191,35 @@ function main(){
     });
 
     makeTxt();
-    /*  if(lastPass!=undefined){
-        lastPass.carriers.forEach(function(c){
-        if(c in carriers){
-        let lastNeedle = parseInt(carriers[c].last.needle.needle);
-        let bed = carriers[c].last.needle.bed;
+    if(lastNeedle!==undefined){
+        let needle = lastNeedle.needle;
+        let bed = lastNeedle.bed;
         let activeRow = (bed==='f' ? frontActiveRow : backActiveRow);
-        let direction = lastPass.direction;
+        let height = (activeRow[needle] !== undefined ?
+            minHeight(activeRow[needle], bed, needle)
+            : neighborHeight(bed, needle));
+        let c = getCarrierNum(lastNeedle.carrier);
 
-        let height = (activeRow[lastNeedle] ?
-        minHeight(activeRow[lastNeedle], bed, lastNeedle)
-        : neighborHeight(bed, lastNeedle));
+        needle += (lastNeedle.direction==='-' ? -1 : 1);
 
-        lastNeedle += (direction==='+' ? 1 : -1);
+        //yarn going to the carrier
+        let xstart = needle*(boxWidth+boxSpacing);
+        let dx = boxWidth/6;
+        let dy = boxHeight/4;
+        let carrierDepth = CARRIERS+CARRIER_SPACING*c;
+        let start = [xstart, height, carrierDepth];
+        stream.write(format(start[0], start[1], start[2]));
 
-    //yarn going to the carrier
-    let xstart = lastNeedle*(boxWidth+boxSpacing)+PADDING;
-    let dx = boxWidth/6;
-    let dy = boxHeight/4;
-    let carrierDepth = CARRIERS+CARRIER_SPACING*c;
-    let start = [xstart, height, carrierDepth];
-    stream.write(format(start[0], start[1], start[2]));
+        //carrier
+        stream.write("c "+format(start[0], start[1], start[2]));
 
-    //carrier
-    stream.write("c "+format(start[0], start[1], start[2]));
+        start[0]-=dx;
+        start[1]+=dy;
+        stream.write("c "+format(start[0], start[1], start[2]));
 
-    start[0]-=dx;
-    start[1]+=dy;
-    stream.write("c "+format(start[0], start[1], start[2]));
-
-    start[0]+=2*dx;
-    stream.write("c "+format(start[0], start[1], start[2]));
+        start[0]+=2*dx;
+        stream.write("c "+format(start[0], start[1], start[2]));
     }
-    });
-    }
-    */
 }
 
 main();
