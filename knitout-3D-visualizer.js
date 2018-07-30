@@ -551,6 +551,7 @@ function makeStitch(direction, bed, needle, carrier, height){
     let carrierDepth = CARRIERS+CARRIER_SPACING*carrier;
     let start = [needle*(boxWidth+boxSpacing), height, carrierDepth];
 
+
     if(direction === '-') dx*= -1;
     else start[0] -= boxWidth;
 
@@ -594,7 +595,9 @@ function makeStitch(direction, bed, needle, carrier, height){
         if(raised) carrierHeight+=epsilon;
 
         //update last stitch
-        toUpdate[lastPt][0] = start[0];
+        let subPadPrev = padding/maxCarriers * getCarrierNum(lastNeedle.carrier);
+
+        toUpdate[lastPt][0] = start[0]+subPadPrev;
         toUpdate[lastPt][1] = carrierHeight;
 
         toUpdate[lastPt-1][1] = carrierHeight;
@@ -1200,7 +1203,7 @@ function main(){
             : neighborHeight(bed, needle));
         let c = getCarrierNum(lastNeedle.carrier);
 
-        needle += (lastNeedle.direction==='-' ? -1 : 1);
+        needle += (lastNeedle.direction==='-' ? -2 : 2);
 
         //yarn going to the carrier
         let xstart = needle*(boxWidth+boxSpacing);
