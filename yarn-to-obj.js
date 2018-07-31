@@ -74,10 +74,13 @@ function main(){
 
     //connect the dots
     for(let i = 1; i<yarnPoints; i++){
-        if(carrierChange[i-1])
+        if(carrierChange[i-1]){
+            //different carrier so change color, and separate line
             buffer+=carrierChange[i-1] +'\n';
-        buffer+= 'f '+i+' '+(i+1)+' '
-            +(2*yarnPoints-i)+' '+(2*yarnPoints-i+1)+'\n';
+        }else if(!carrierChange[i]){
+            buffer+= 'f '+i+' '+(i+1)+' '
+                +(2*yarnPoints-i)+' '+(2*yarnPoints-i+1)+'\n';
+        }
     }
     //draw triangles
     for(let i = 0; i<carriers.length; i+=3){
