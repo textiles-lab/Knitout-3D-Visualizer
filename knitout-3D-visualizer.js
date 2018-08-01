@@ -383,8 +383,9 @@ function yarnPass(floops, bloops, direction){
 
 //stored in array of active loops. Its a row and a needle number used to access
 //the object in the "yarn" array
-function loopSpec(row){
+function loopSpec(row, carrier){
     this.row = row;
+    this.carrier = carrier;
 }
 
 
@@ -489,8 +490,9 @@ function setMaxHeight(index1, index2, newHeight){
 }
 
 //gets yarn "height" of neighbors
-function neighborHeight(bed, needle){
+function neighborHeight(bed, needle, carrier){
     let max = 0;
+    let cNum = getCarrierNum(carrier);
     let left = needle-1;
     let right = needle-1;
     let activeRow = (bed==='f' ? frontActiveRow : backActiveRow);
@@ -498,8 +500,8 @@ function neighborHeight(bed, needle){
         if(left>=0){
             if(activeRow[left]){
                 let row = activeRow[left].row;
-                if((bed==='f' && yarn[row].floops[left])
-                    ||(bed==='b' && yarn[row].bloops[left])){
+                if((bed==='f' && yarn[cNum][row].floops[left])
+                    ||(bed==='b' && yarn[cNum][row].bloops[left])){
                     max = Math.max(max, minHeight(activeRow[left], bed, left));
                     left = -1;
                 }
@@ -509,8 +511,8 @@ function neighborHeight(bed, needle){
         if(right<activeRow.length){
             if(activeRow[right]){
                 let row = activeRow[right].row;
-                if((bed==='f'&& yarn[row].floops[right])
-                    ||(bed==='b'&&yarn[row].bloops[right])){
+                if((bed==='f'&& yarn[cNum]row].floops[right])
+                    ||(bed==='b'&&yarn[cNum][row].bloops[right])){
                     max = Math.max(max, minHeight(activeRow[right], bed, right));
                     right = activeRow.length;
                 }
@@ -525,8 +527,10 @@ function neighborHeight(bed, needle){
 function minHeight(needleSpec, bed, needle){
 
     let min = Infinity;
-    let loops = (bed==='f' ? yarn[needleSpec.row].floops[needle]
-        : yarn[needleSpec.row].bloops[needle]);
+    let carrier = needleSpec.carrier;
+    let cNum = getCarrierNum(carrier);
+    let loops = (bed==='f' ? yarn[cNum][needleSpec.row].floops[needle]
+        : yarn[cNum][needleSpec.row].bloops[needle]);
     for(let i = 0; i<loops.length; i++){
         min = Math.min(min, loops[i].ctrlPts[1][1]);
     }
@@ -562,6 +566,7 @@ function makeStitch(direction, bed, needle, carrier, height){
     if(lastNeedle!==undefined){
         //get max height since last needle
         //I think, for this just getting the carrier level horizons is fine.
+        let lastCNum = getCarrierNum(lastNeedle.carrier);
         //maxheight index of the current stitch
         let n1 = needle;
         let LorR1 = (needle>lastNeedle.needle ? '-' : '+');
@@ -579,8 +584,8 @@ function makeStitch(direction, bed, needle, carrier, height){
         let lowerBound = Math.min(index1, index2);
 
         let toUpdate = (lastNeedle.bed==='f'?
-            yarn[lastNeedle.row].floops[lastNeedle.needle]
-            : yarn[lastNeedle.row].bloops[lastNeedle.needle]);
+            yarn[lastCNum][lastNeedle.row].floops[lastNeedle.needle]
+            : yarn[lastCNum][lastNeedle.row].bloops[lastNeedle.needle]);
         toUpdate = toUpdate[toUpdate.length-1].ctrlPts;
         let lastPt = toUpdate.length-1;
 
@@ -595,7 +600,7 @@ function makeStitch(direction, bed, needle, carrier, height){
         if(raised) carrierHeight+=epsilon;
 
         //update last stitch
-        let subPadPrev = padding/maxCarriers * getCarrierNum(lastNeedle.carrier);
+        let subPadPrev = padding/maxCarriers * lastCNum;
 
         toUpdate[lastPt][0] = start[0]+subPadPrev;
         toUpdate[lastPt][1] = carrierHeight;
@@ -734,9 +739,10 @@ function tuck(direction, bed, needle, carrier){
     }
 
     if(!activeRow[needle]){
-        activeRow[needle] = new loopSpec(row);
+        activeRow[needle] = new loopSpec(row, carrier);
     }else{
         activeRow[needle].row = [row];
+        activeRow[needle].carrier = carrier;
     }
     lastNeedle = {}
     lastNeedle.needle = needle;
@@ -769,7 +775,7 @@ function knit(direction, bed, needle, carrier){
             newBloop[needle] = [newLoop];
         yarn[row] = new yarnPass(newFloop, newBloop, direction);
     }
-    activeRow[needle] = new loopSpec(row);
+    activeRow[needle] = new loopSpec(row, carrier);
     lastNeedle = {};
     lastNeedle.carrier = carrier;
     lastNeedle.needle = needle;
@@ -808,7 +814,7 @@ function xfer(fromSide, fromNeedle, toSide, toNeedle){
     let fromRow = specs.row;
     let toRow = fromRow;//+1;
     if(toActiveRow[toNeedle]===undefined){
-        toActiveRow[toNeedle] = new loopSpec(toRow);
+        toActiveRow[toNeedle] = new loopSpec(toRow, specs.carrier);
     }
 
     let destRow = yarn[toRow];
