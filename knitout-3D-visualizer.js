@@ -24,7 +24,8 @@ const fs = require('fs');
 var stream = fs.createWriteStream(textFile);
 var frontActiveRow = [];
 var backActiveRow = [];
-var lastNeedle;
+var lastNeedle = [];
+var anyLast;
 //stores current "highest" yarn in the transfer area at the end of each stitch
 var maxHeight = [];
 var horizons = [];
@@ -511,7 +512,7 @@ function neighborHeight(bed, needle, carrier){
         if(right<activeRow.length){
             if(activeRow[right]){
                 let row = activeRow[right].row;
-                if((bed==='f'&& yarn[cNum]row].floops[right])
+                if((bed==='f'&& yarn[cNum][row].floops[right])
                     ||(bed==='b'&&yarn[cNum][row].bloops[right])){
                     max = Math.max(max, minHeight(activeRow[right], bed, right));
                     right = activeRow.length;
@@ -539,6 +540,7 @@ function minHeight(needleSpec, bed, needle){
 
 //makes a list of points for a standard stitch
 function makeStitch(direction, bed, needle, carrier, height){
+    let cNum = getCarrierNum(carrier);
     let info = [];
     let width = boxWidth-PADDING*2;
     let dx = width/5;
@@ -562,37 +564,35 @@ function makeStitch(direction, bed, needle, carrier, height){
     if(bed==='b'){
         dz*=-1;
     }
-
-    if(lastNeedle!==undefined){
+    if(lastNeedle[cNum]!==undefined){
         //get max height since last needle
         //I think, for this just getting the carrier level horizons is fine.
-        let lastCNum = getCarrierNum(lastNeedle.carrier);
         //maxheight index of the current stitch
         let n1 = needle;
-        let LorR1 = (needle>lastNeedle.needle ? '-' : '+');
-        if(lastNeedle.direction !== direction)
+        let LorR1 = (needle>lastNeedle[cNum].needle ? '-' : '+');
+        if(lastNeedle[cNum].direction !== direction)
             LorR1 = (LorR1==='-' ? '+' : '-');
         let index1 = pointName(bed, LorR1, n1, carrier);
 
         //maxheight index of previous stitch
-        let LorR2 = (lastNeedle.needle<needle ? '+' : '-');
-        let n2 = lastNeedle.needle;
-        let index2 = pointName(lastNeedle.bed, LorR2, n2,
-            lastNeedle.carrier);
+        let LorR2 = (lastNeedle[cNum].needle<needle ? '+' : '-');
+        let n2 = lastNeedle[cNum].needle;
+        let index2 = pointName(lastNeedle[cNum].bed, LorR2, n2,
+            carrier);
 
         let upperBound = Math.max(index1, index2);
         let lowerBound = Math.min(index1, index2);
 
-        let toUpdate = (lastNeedle.bed==='f'?
-            yarn[lastCNum][lastNeedle.row].floops[lastNeedle.needle]
-            : yarn[lastCNum][lastNeedle.row].bloops[lastNeedle.needle]);
+        let toUpdate = (lastNeedle[cNum].bed==='f'?
+            yarn[cNum][lastNeedle[cNum].row].floops[lastNeedle[cNum].needle]
+            : yarn[cNum][lastNeedle[cNum].row].bloops[lastNeedle[cNum].needle]);
         toUpdate = toUpdate[toUpdate.length-1].ctrlPts;
         let lastPt = toUpdate.length-1;
 
         carrierHeight = toUpdate[lastPt][1];
         let raised = false;
         for(let i = lowerBound; i<=upperBound; i++){
-            if(i!==index2 && maxHeight[i]>carrierHeight){
+            if(i!==index2 && maxHeight[i]>=carrierHeight){
                 raised = true;
                 carrierHeight = maxHeight[i];
             }
@@ -600,7 +600,7 @@ function makeStitch(direction, bed, needle, carrier, height){
         if(raised) carrierHeight+=epsilon;
 
         //update last stitch
-        let subPadPrev = padding/maxCarriers * lastCNum;
+        let subPadPrev = padding/maxCarriers * cNum;
 
         toUpdate[lastPt][0] = start[0]+subPadPrev;
         toUpdate[lastPt][1] = carrierHeight;
@@ -614,8 +614,8 @@ function makeStitch(direction, bed, needle, carrier, height){
             maxHeight[i] = carrierHeight;
             let dir = (direction==='-' ? '+' : '-');
             let j = pointName(bed, dir, needle, carrier);
-            let k = pointName(lastNeedle.bed, lastNeedle.direction,
-                lastNeedle.needle, lastNeedle.carrier);
+            let k = pointName(lastNeedle[cNum].bed, lastNeedle[cNum].direction,
+                lastNeedle[cNum].needle, carrier);
             maxHeight[j] = carrierHeight;
             maxHeight[k] = carrierHeight;
         }
@@ -710,19 +710,20 @@ function makeStitch(direction, bed, needle, carrier, height){
  */
 
 function tuck(direction, bed, needle, carrier){
+    let cNum = getCarrierNum(carrier);
     let activeRow = (bed==='f' ? frontActiveRow : backActiveRow);
-    let row = (lastNeedle===undefined ? 0 : lastNeedle.row);
-    if(lastNeedle!==undefined && lastNeedle.direction!==direction)
+    let row = (lastNeedle[cNum]===undefined ? 0 : lastNeedle[cNum].row);
+    if(lastNeedle[cNum]!==undefined && lastNeedle[cNum].direction!==direction)
         row++;
 
     let height = (activeRow[needle] !== undefined ?
         minHeight(activeRow[needle], bed, needle)//+boxSpacing
-        : neighborHeight(bed, needle));
+        : neighborHeight(bed, needle, carrier));
 
     let info = makeStitch(direction, bed, needle, carrier, height);
     let newLoop = new loop(info, carrier);
-    if(yarn[row]){
-        let yarnLoops = (bed==='f' ? yarn[row].floops : yarn[row].bloops);
+    if(yarn[cNum]!==undefined && yarn[cNum][row]!==undefined){
+        let yarnLoops = (bed==='f' ? yarn[cNum][row].floops : yarn[cNum][row].bloops);
         if(yarnLoops[needle]){
             yarnLoops[needle].push(newLoop);
         }else{
@@ -735,7 +736,9 @@ function tuck(direction, bed, needle, carrier){
             newFloop[needle] = [newLoop];
         }else
             newBloop[needle] = [newLoop];
-        yarn[row] = new yarnPass(newFloop, newBloop, direction);
+        if(yarn[cNum]===undefined)
+            yarn[cNum] = [];
+        yarn[cNum][row] = new yarnPass(newFloop, newBloop, direction);
     }
 
     if(!activeRow[needle]){
@@ -744,27 +747,32 @@ function tuck(direction, bed, needle, carrier){
         activeRow[needle].row = [row];
         activeRow[needle].carrier = carrier;
     }
-    lastNeedle = {}
-    lastNeedle.needle = needle;
-    lastNeedle.carrier = carrier;
-    lastNeedle.bed = bed;
-    lastNeedle.direction = direction;
-    lastNeedle.row = row;
+    lastNeedle[cNum] = {}
+    lastNeedle[cNum].needle = needle;
+    lastNeedle[cNum].carrier = carrier;
+    lastNeedle[cNum].bed = bed;
+    lastNeedle[cNum].direction = direction;
+    lastNeedle[cNum].row = row;
+    anyLast = lastNeedle[cNum];
 }
 
 function knit(direction, bed, needle, carrier){
+    let cNum = getCarrierNum(carrier);
     let activeRow = (bed==='f' ? frontActiveRow : backActiveRow);
     let height = (activeRow[needle] !== undefined ?
         minHeight(activeRow[needle], bed, needle)+boxSpacing
-        : neighborHeight(bed, needle));
+        : neighborHeight(bed, needle, carrier));
 
     let info = makeStitch(direction, bed, needle, carrier, height);
-    let row = lastNeedle.row;
-    if(direction!==lastNeedle.direction)
+
+    let row = (lastNeedle[cNum]===undefined ? anyLast.row : lastNeedle[cNum].row);
+    let lastDir = (lastNeedle[cNum]===undefined?
+        anyLast.direction : lastNeedle[cNum].direction);
+    if(direction!==lastDir)
         row++;
     let newLoop = new loop(info, carrier);
-    if(yarn[row]){
-        let yarnLoops = (bed==='f' ? yarn[row].floops : yarn[row].bloops);
+    if(yarn[cNum]!==undefined && yarn[cNum][row]!==undefined){
+        let yarnLoops = (bed==='f' ? yarn[cNum][row].floops : yarn[cNum][row].bloops);
         yarnLoops[needle] = [newLoop];
     }else{
         let newFloop = [];
@@ -773,15 +781,18 @@ function knit(direction, bed, needle, carrier){
             newFloop[needle] = [newLoop];
         }else
             newBloop[needle] = [newLoop];
-        yarn[row] = new yarnPass(newFloop, newBloop, direction);
+        if(yarn[cNum]===undefined)
+            yarn[cNum] = [];
+        yarn[cNum][row] = new yarnPass(newFloop, newBloop, direction);
     }
     activeRow[needle] = new loopSpec(row, carrier);
-    lastNeedle = {};
-    lastNeedle.carrier = carrier;
-    lastNeedle.needle = needle;
-    lastNeedle.bed = bed;
-    lastNeedle.direction = direction;
-    lastNeedle.row = row;
+    lastNeedle[cNum] = {};
+    lastNeedle[cNum].carrier = carrier;
+    lastNeedle[cNum].needle = needle;
+    lastNeedle[cNum].bed = bed;
+    lastNeedle[cNum].direction = direction;
+    lastNeedle[cNum].row = row;
+    anyLast = lastNeedle[cNum];
 }
 
 function xfer(fromSide, fromNeedle, toSide, toNeedle){
@@ -793,8 +804,9 @@ function xfer(fromSide, fromNeedle, toSide, toNeedle){
     }
 
     let specs = fromActiveRow[fromNeedle];
-    let info = (fromSide==='f' ? yarn[specs.row].floops[fromNeedle]
-        : yarn[specs.row].bloops[fromNeedle]);
+    let cNum = getCarrierNum(specs.carrier);
+    let info = (fromSide==='f' ? yarn[cNum][specs.row].floops[fromNeedle]
+        : yarn[cNum][specs.row].bloops[fromNeedle]);
 
     let dx = (info[0].ctrlPts[2][0]-info[0].ctrlPts[1][0])/2;
     let direction = (dx<0 ? '-' : '+');
@@ -817,12 +829,12 @@ function xfer(fromSide, fromNeedle, toSide, toNeedle){
         toActiveRow[toNeedle] = new loopSpec(toRow, specs.carrier);
     }
 
-    let destRow = yarn[toRow];
-    if(yarn[toRow] === undefined){
+    let destRow = yarn[cNum][toRow];
+    if(yarn[cNum][toRow] === undefined){
         let newFloop = [];
         let newBloop = [];
-        yarn[toRow] = new yarnPass(newFloop, newBloop, yarn[fromRow].direction);
-        destRow = yarn[toRow];
+        yarn[cNum][toRow] = new yarnPass(newFloop, newBloop, yarn[cNum][fromRow].direction);
+        destRow = yarn[cNum][toRow];
     }
 
     let destination = (toSide==='f' ? destRow.floops[toNeedle]
@@ -842,60 +854,55 @@ function xfer(fromSide, fromNeedle, toSide, toNeedle){
                 destRow.bloops[toNeedle] = [newLoop];
         }
     }
-    if(lastNeedle.needle === fromNeedle
-        && lastNeedle.bed === fromSide
-        && lastNeedle.row === fromRow){
-        lastNeedle.needle = toNeedle;
-        lastNeedle.bed = toSide;
-        lastNeedle.row = toRow;
+    if(lastNeedle[cNum].needle === fromNeedle
+        && lastNeedle[cNum].bed === fromSide
+        && lastNeedle[cNum].row === fromRow){
+        lastNeedle[cNum].needle = toNeedle;
+        lastNeedle[cNum].bed = toSide;
+        lastNeedle[cNum].row = toRow;
     }
 
     info = undefined;
     fromActiveRow[fromNeedle] = undefined;
-    if(fromSide==='f') yarn[fromRow].floops[fromNeedle] = undefined;
-    else yarn[fromRow].bloops[fromNeedle] = undefined;
+    if(fromSide==='f') yarn[cNum][fromRow].floops[fromNeedle] = undefined;
+    else yarn[cNum][fromRow].bloops[fromNeedle] = undefined;
 }
 
 function makeTxt(){
     let mostRecentC;
-    for(let row = 0; row<yarn.length; row++){
-        let direction = yarn[row].direction;
-        let yarnRow = yarn[row];
-        let maxNeedle = Math.max(yarnRow.floops.length, yarnRow.bloops.length);
-        for(let col = 0; col<maxNeedle; col++){
-            let needle = col;
-            if(direction === '-') needle = maxNeedle-col-1;
-            let loop = yarnRow.floops[needle];
-            if(loop){
-                for(let i = 0; i<loop.length; i++){
-                    let pts = loop[i].ctrlPts;
-                    let carrier = loop[i].carrier;
-                    if(carrier!=mostRecentC){
-                        stream.write("usemtl mtl"+carrier+"\n");
-                        mostRecentC = carrier;
+    for(let cNum = 0; cNum<allCarriers.length;cNum++){
+        stream.write("usemtl mtl"+cNum+"\n");
+        for(let row = 0; row<yarn[cNum].length; row++){
+            if(yarn[cNum][row]!==undefined){
+                let direction = yarn[cNum][row].direction;
+                let yarnRow = yarn[cNum][row];
+                let maxNeedle = Math.max(yarnRow.floops.length, yarnRow.bloops.length);
+                for(let col = 0; col<maxNeedle; col++){
+                    let needle = col;
+                    if(direction === '-') needle = maxNeedle-col-1;
+                    let loop = yarnRow.floops[needle];
+                    if(loop){
+                        for(let i = 0; i<loop.length; i++){
+                            let pts = loop[i].ctrlPts;
+                            for(let j = 0; j<pts.length; j++){
+                                let pt = pts[j];
+                                stream.write(format(pt[0], pt[1], pt[2]));
+                            }
+                        }
                     }
-                    for(let j = 0; j<pts.length; j++){
-                        let pt = pts[j];
-                        stream.write(format(pt[0], pt[1], pt[2]));
+                    loop = yarnRow.bloops[needle];
+                    if(loop){
+                        for(let i = 0; i<loop.length; i++){
+                            let pts = loop[i].ctrlPts;
+                            for(let j = 0; j<pts.length; j++){
+                                let pt = pts[j];
+                                stream.write(format(pt[0], pt[1], pt[2]));
+                            }
+                        }
                     }
-                }
-            }
-            loop = yarnRow.bloops[needle];
-            if(loop){
-                for(let i = 0; i<loop.length; i++){
-                    let pts = loop[i].ctrlPts;
-                    let carrier = loop[i].carrier;
-                    if(carrier!=mostRecentC){
-                        stream.write("usemtl mtl"+carrier+"\n");
-                        mostRecentC = carrier;
-                    }
-                    for(let j = 0; j<pts.length; j++){
-                        let pt = pts[j];
-                        stream.write(format(pt[0], pt[1], pt[2]));
-                    }
-                }
-            }
 
+                }
+            }
         }
     }
 }
@@ -968,7 +975,7 @@ function main(){
     function getCarriers(line){
         let m = line.includes(";;Carriers:");
         if(m){
-            let c = line.substring(11);
+            let c = line.substring(12);
             allCarriers = c.split(' ');
         }
     }
@@ -1199,14 +1206,14 @@ function main(){
         }
     });
 
-    makeTxt();
+    makeTxt();/*
     if(lastNeedle!==undefined){
         let needle = lastNeedle.needle;
         let bed = lastNeedle.bed;
         let activeRow = (bed==='f' ? frontActiveRow : backActiveRow);
         let height = (activeRow[needle] !== undefined ?
             minHeight(activeRow[needle], bed, needle)
-            : neighborHeight(bed, needle));
+            : neighborHeight(bed, needle, carrier));
         let c = getCarrierNum(lastNeedle.carrier);
 
         needle += (lastNeedle.direction==='-' ? -2 : 2);
@@ -1228,7 +1235,7 @@ function main(){
 
         start[0]+=2*dx;
         stream.write("c "+format(start[0], start[1], start[2]));
-    }
+    }*/
 }
 
 main();
