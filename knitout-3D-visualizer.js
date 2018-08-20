@@ -417,76 +417,65 @@ function getCarrierNum(cs){
 }
 
 function pointName(plane, direction, needle, carrier){
+    //horizon's shall be stored only for 2 points of each needle now:
+    //the main stitch area, and the carrier associated with that needle
+
     //planes should be 'f' or 'b' or 'c'
     //needle should be int
     //direction should be '+' or '-' if 'f' or 'b' for plane
     //carrier should be some string if 'f' or 'b' for plane
     console.assert(plane==='f'||plane==='b'||plane==='c',
         "'plane' field must be 'f', 'b', or 'c'.");
-    console.assert(typeof(needle) == 'number', "'needle' field must be a number.");
-    if(plane==='f' || plane==='b'){
+    console.assert(typeof(needle) == 'number', "'needle' must be a number.");
+    if(plane === 'c')
         console.assert(direction==='+'||direction==='-',
             "'direction' field can only be '-' or '+'");
-        console.assert(typeof(carrier) == 'string',
-            "'carrier' field must be a string.");
-    }
+    console.assert(typeof(carrier) == 'string',
+        "'carrier' field must be a string.");
+
 
     let index = 0;
-
     let c = allCarriers.length;
-    //each needle occupies 5c indices.
-    //c spots on the left and right of each needle
+    //each needle occupies c+2 indices.
     //front and back versions of each needle
     //and then c indices, one for each carrier for the carrier depth.
 
-    index+=needle*(5*c);
+    let n = needle;
+    if(plane==='c' && direction==='-')
+        n -=1 ;
+    index+=n*(c+2);
 
     if(plane==='b')
-        index+=(2*c);
+        index+1;
     else if(plane==='c')
-        index+=4*c;
-
-    if(plane!=='c'&&direction==='+')
-        index+=c;
+        index+=+2;
 
     index+=allCarriers.indexOf(carrier);
-
 
     return index;
 }
 
-function indexTests(){
-    console.log(pointName('f', '-', 9,'6'));
-    console.log(pointName('f', '-', 9,'8'));
-    console.log(pointName('f', '+', 9,'6'));
-    console.log(pointName('f', '+', 9,'8'));
-    console.log(pointName('c', '+', 9,'6'));
-    console.log(pointName('c', '+', 9,'8'));
-    console.log(pointName('b', '-', 9,'6'));
-    console.log(pointName('b', '-', 9,'8'));
-    console.log(pointName('b', '+', 9,'6'));
-    console.log(pointName('b', '+', 9,'8'));
-    console.log(pointName('f', '-', 10,'6'));
-}
-
 //gets the necessary height to prevent intersections at the carrier level
-function getMaxHeight(minHeight, index1, index2){
-    let max = minHeight;
-    let lowerBound = Math.min(index1, index2);
-    let upperBound = Math.max(index1, index2);
-    for(let i = lowerBound; i<=upperBound; i++){
-        if(maxHeight[i]!='undefined' && max<=maxHeight[i])
-            max = maxHeight[i]+epsilon;
+function getMaxHeight(minHeight, min, max, carrier){
+    let raised = false;
+    let result = minHeight;
+    for(let i = min; i<max; i++){
+        let cIndex = pointName('c', '+', i, carrier);
+        if(maxHeight[cIndex]>=result){
+            raised = true;
+            result = maxHeight[cIndex];
+        }
     }
-    return max;
+    if(raised) result +=epsilon;
+
+    return result;
 }
 
 //updates max height for a range
-function setMaxHeight(index1, index2, newHeight){
-    let lowerBound = Math.min(index1, index2);
-    let upperBound = Math.max(index1, index2);
-    for(let i = lowerBound; i<=upperBound; i++){
-        maxHeight[i] = newHeight;
+function setMaxHeight(newHeight, min, max, carrier){
+    for(let i = min; i<max; i++){
+        let cIndex = pointName('c', '+', i, carrier);
+        maxHeight[cIndex] = newHeight;
     }
 }
 
@@ -566,22 +555,6 @@ function makeStitch(direction, bed, needle, carrier, height){
     }
     if(lastNeedle[cNum]!==undefined){
         //get max height since last needle
-        //I think, for this just getting the carrier level horizons is fine.
-        //maxheight index of the current stitch
-        let n1 = needle;
-        let LorR1 = (needle>lastNeedle[cNum].needle ? '-' : '+');
-        if(lastNeedle[cNum].direction !== direction)
-            LorR1 = (LorR1==='-' ? '+' : '-');
-        let index1 = pointName(bed, LorR1, n1, carrier);
-
-        //maxheight index of previous stitch
-        let LorR2 = (lastNeedle[cNum].needle<needle ? '+' : '-');
-        let n2 = lastNeedle[cNum].needle;
-        let index2 = pointName(lastNeedle[cNum].bed, LorR2, n2,
-            carrier);
-
-        let upperBound = Math.max(index1, index2);
-        let lowerBound = Math.min(index1, index2);
 
         let toUpdate = (lastNeedle[cNum].bed==='f'?
             yarn[cNum][lastNeedle[cNum].row].floops[lastNeedle[cNum].needle]
@@ -589,15 +562,22 @@ function makeStitch(direction, bed, needle, carrier, height){
         toUpdate = toUpdate[toUpdate.length-1].ctrlPts;
         let lastPt = toUpdate.length-1;
 
+        //maxheight index of the current stitch
+        let n1 = needle;
+        let LorR1 = (needle>lastNeedle[cNum].needle ? '-' : '+');
+        if(lastNeedle[cNum].direction !== direction)
+            LorR1 = (LorR1==='-' ? '+' : '-');
+
+        //maxheight index of previous stitch
+        let LorR2 = (lastNeedle[cNum].needle<needle ? '+' : '-');
+        let n2 = lastNeedle[cNum].needle;
+
+        let upperBound = Math.max(n1, n2);
+        let lowerBound = Math.min(n1, n2);
+
         carrierHeight = toUpdate[lastPt][1];
-        let raised = false;
-        for(let i = lowerBound; i<=upperBound; i++){
-            if(i!==index2 && maxHeight[i]>=carrierHeight){
-                raised = true;
-                carrierHeight = maxHeight[i];
-            }
-        }
-        if(raised) carrierHeight+=epsilon;
+        carrierHeight = getMaxHeight(carrierHeight, lowerBound,
+                                    upperBound, carrier);
 
         //update last stitch
         let subPadPrev = padding/maxCarriers * cNum;
@@ -610,25 +590,11 @@ function makeStitch(direction, bed, needle, carrier, height){
         toUpdate[lastPt-2][1] = carrierHeight;
 
         //set maxheight in between needles
-        for(let i = lowerBound; i<=upperBound; i++){
-            maxHeight[i] = carrierHeight;
-            let dir = (direction==='-' ? '+' : '-');
-            let j = pointName(bed, dir, needle, carrier);
-            let k = pointName(lastNeedle[cNum].bed, lastNeedle[cNum].direction,
-                lastNeedle[cNum].needle, carrier);
-            maxHeight[j] = carrierHeight;
-            maxHeight[k] = carrierHeight;
-        }
+        setMaxHeight(carrierHeight, lowerBound, upperBound, carrier);
     }
 
     //find the current needed height for the end of the current stitch
-    let index = pointName('c', '', spaceNeedle, carrier);
-    if(maxHeight[index]!==undefined && height<=maxHeight[index]){
-        stackHeight = maxHeight[index]+epsilon;
-    }
 
-    //store that value in the maxHeight array
-    maxHeight[index] = stackHeight;
     let x = start[0];
     let y = start[1];
     let z = start[2];
@@ -872,35 +838,37 @@ function makeTxt(){
     let mostRecentC;
     for(let cNum = 0; cNum<allCarriers.length;cNum++){
         stream.write("usemtl mtl"+cNum+"\n");
-        for(let row = 0; row<yarn[cNum].length; row++){
-            if(yarn[cNum][row]!==undefined){
-                let direction = yarn[cNum][row].direction;
-                let yarnRow = yarn[cNum][row];
-                let maxNeedle = Math.max(yarnRow.floops.length, yarnRow.bloops.length);
-                for(let col = 0; col<maxNeedle; col++){
-                    let needle = col;
-                    if(direction === '-') needle = maxNeedle-col-1;
-                    let loop = yarnRow.floops[needle];
-                    if(loop){
-                        for(let i = 0; i<loop.length; i++){
-                            let pts = loop[i].ctrlPts;
-                            for(let j = 0; j<pts.length; j++){
-                                let pt = pts[j];
-                                stream.write(format(pt[0], pt[1], pt[2]));
+        if(yarn[cNum]!==undefined){
+            for(let row = 0; row<yarn[cNum].length; row++){
+                if(yarn[cNum][row]!==undefined){
+                    let direction = yarn[cNum][row].direction;
+                    let yarnRow = yarn[cNum][row];
+                    let maxNeedle = Math.max(yarnRow.floops.length, yarnRow.bloops.length);
+                    for(let col = 0; col<maxNeedle; col++){
+                        let needle = col;
+                        if(direction === '-') needle = maxNeedle-col-1;
+                        let loop = yarnRow.floops[needle];
+                        if(loop){
+                            for(let i = 0; i<loop.length; i++){
+                                let pts = loop[i].ctrlPts;
+                                for(let j = 0; j<pts.length; j++){
+                                    let pt = pts[j];
+                                    stream.write(format(pt[0], pt[1], pt[2]));
+                                }
                             }
                         }
-                    }
-                    loop = yarnRow.bloops[needle];
-                    if(loop){
-                        for(let i = 0; i<loop.length; i++){
-                            let pts = loop[i].ctrlPts;
-                            for(let j = 0; j<pts.length; j++){
-                                let pt = pts[j];
-                                stream.write(format(pt[0], pt[1], pt[2]));
+                        loop = yarnRow.bloops[needle];
+                        if(loop){
+                            for(let i = 0; i<loop.length; i++){
+                                let pts = loop[i].ctrlPts;
+                                for(let j = 0; j<pts.length; j++){
+                                    let pt = pts[j];
+                                    stream.write(format(pt[0], pt[1], pt[2]));
+                                }
                             }
                         }
-                    }
 
+                    }
                 }
             }
         }
@@ -1218,7 +1186,7 @@ function main(){
 
         needle += (lastNeedle.direction==='-' ? -2 : 2);
 
-        //yarn going to the carrier
+//yarn going to the carrier
         let xstart = needle*(boxWidth+boxSpacing);
         let dx = boxWidth/6;
         let dy = boxHeight/4;
@@ -1236,7 +1204,7 @@ function main(){
         start[0]+=2*dx;
         stream.write("c "+format(start[0], start[1], start[2]));
     }*/
-}
+    }
 
 main();
 
