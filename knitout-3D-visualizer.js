@@ -41,7 +41,7 @@ var epsilon = 0.1;
 //layer depths
 const FRONT_BED = 1;
 const BACK_BED = -1;
-const CARRIERS = 0.5;
+const CARRIERS = 0;
 const FRONT_SLIDERS = 0.5;
 const BACK_SLIDERS = -0.5;
 const CROSSING = boxWidth/3;
@@ -532,32 +532,15 @@ function minHeight(needleSpec, bed, needle){
     return max - (boxHeight/6) - boxSpacing;
 }
 
-//makes a list of points for a standard stitch
-function makeStitch(direction, bed, needle, carrier, height){
-    let cNum = getCarrierNum(carrier);
-    let info = [];
-    let width = boxWidth-PADDING*2;
-    let dx = width/5;
-    let dy =  boxHeight/3;
-    let dz = boxDepth/2;
-    let padding = (direction==='-' ? -PADDING : PADDING);
-
-    let activeRow = (bed==='f' ? frontActiveRow : backActiveRow);
-    let stackHeight = height;
+//updates last stitch to avoid intersections at the carrier level
+function updateLast(lastNeedle, direction, needle, carrier, height){
     let carrierHeight = height;
-    let spaceNeedle = (direction==='-' ? needle-1 : needle);
-
-
+    let cNum = getCarrierNum(carrier);
+    let padding = (direction==='-' ? -PADDING : PADDING);
     let carrierDepth = CARRIERS+CARRIER_SPACING*carrier;
     let start = [needle*(boxWidth+boxSpacing), height, carrierDepth];
+    if(direction === '+') start[0] -= boxWidth;
 
-
-    if(direction === '-') dx*= -1;
-    else start[0] -= boxWidth;
-
-    if(bed==='b'){
-        dz*=-1;
-    }
     if(lastNeedle[cNum]!==undefined){
         //get max height since last needle
 
@@ -597,9 +580,37 @@ function makeStitch(direction, bed, needle, carrier, height){
         //set maxheight in between needles
         setMaxHeight(carrierHeight, lowerBound, upperBound, carrier);
     }
+    return carrierHeight;
+}
+
+//makes a list of points for a standard stitch
+function makeStitch(direction, bed, needle, carrier, height){
+    let cNum = getCarrierNum(carrier);
+    let info = [];
+    let width = boxWidth-PADDING*2;
+    let dx = width/5;
+    let dy =  boxHeight/3;
+    let dz = boxDepth/2;
+    let padding = (direction==='-' ? -PADDING : PADDING);
+
+    let activeRow = (bed==='f' ? frontActiveRow : backActiveRow);
+    let stackHeight = height;
+    let carrierHeight = height;
+    let spaceNeedle = (direction==='-' ? needle-1 : needle);
+
+    let carrierDepth = CARRIERS+CARRIER_SPACING*carrier;
+    let start = [needle*(boxWidth+boxSpacing), height, carrierDepth];
+
+    if(direction === '-') dx*= -1;
+    else start[0] -= boxWidth;
+
+    if(bed==='b'){
+        dz*=-1;
+    }
+
+    carrierHeight = updateLast(lastNeedle, direction, needle, carrier, height);
 
     //find the current needed height for the end of the current stitch
-
     let x = start[0];
     let y = start[1];
     let z = start[2];
