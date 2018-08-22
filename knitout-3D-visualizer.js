@@ -486,14 +486,19 @@ function neighborHeight(bed, needle, carrier){
     let left = needle-1;
     let right = needle+1;
     let activeRow = (bed==='f' ? frontActiveRow : backActiveRow);
+
+    if(yarn[cNum] === undefined)
+        return max;
     while(left>=0||right<activeRow.length){
         if(left>=0){
             if(activeRow[left]){
                 let row = activeRow[left].row;
-                if((bed==='f' && yarn[cNum][row].floops[left])
-                    ||(bed==='b' && yarn[cNum][row].bloops[left])){
-                    max = Math.max(max, minHeight(activeRow[left], bed, left));
-                    left = -1;
+                if(yarn[cNum][row]!==undefined){
+                    if((bed==='f' && yarn[cNum][row].floops[left])
+                        ||(bed==='b' && yarn[cNum][row].bloops[left])){
+                        max = Math.max(max, minHeight(activeRow[left], bed, left));
+                        left = -1;
+                    }
                 }
             }
             left--;
@@ -501,10 +506,12 @@ function neighborHeight(bed, needle, carrier){
         if(right<activeRow.length){
             if(activeRow[right]){
                 let row = activeRow[right].row;
-                if((bed==='f'&& yarn[cNum][row].floops[right])
-                    ||(bed==='b'&&yarn[cNum][row].bloops[right])){
-                    max = Math.max(max, minHeight(activeRow[right], bed, right));
-                    right = activeRow.length;
+                if(yarn[cNum][row]!==undefined){
+                    if((bed==='f'&& yarn[cNum][row].floops[right])
+                        ||(bed==='b'&&yarn[cNum][row].bloops[right])){
+                        max = Math.max(max, minHeight(activeRow[right], bed, right));
+                        right = activeRow.length;
+                    }
                 }
             }
             right++;
@@ -513,21 +520,17 @@ function neighborHeight(bed, needle, carrier){
     return max;
 }
 
-//gets lowest "height" of a stitch on a certain active needle
 function minHeight(needleSpec, bed, needle){
-
-    let min = Infinity;
+    let max = -Infinity;
     let carrier = needleSpec.carrier;
     let cNum = getCarrierNum(carrier);
     let loops = (bed==='f' ? yarn[cNum][needleSpec.row].floops[needle]
         : yarn[cNum][needleSpec.row].bloops[needle]);
     for(let i = 0; i<loops.length; i++){
-        min = Math.min(min, loops[i].ctrlPts[1][1]);
+        max = Math.max(max, loops[i].ctrlPts[6][1]);
     }
-    return min;
+    return max - (boxHeight/6) - boxSpacing;
 }
-
-
 
 //makes a list of points for a standard stitch
 function makeStitch(direction, bed, needle, carrier, height){
@@ -732,9 +735,13 @@ function knit(direction, bed, needle, carrier){
         minHeight(activeRow[needle], bed, needle)+boxSpacing
         : topHeight);
 
-    if(topHeight>bottomHeight) console.log('ah');
-
     let info = makeStitch(direction, bed, needle, carrier, bottomHeight);
+    if(topHeight>bottomHeight){
+        let topInfo = makeStitch(direction, bed, needle, carrier, topHeight);
+        for(let i = 4; i<=11; i++){
+            info[i] = topInfo[i];
+        }
+    }
 
     let row = (lastNeedle[cNum]===undefined ? anyLast.row : lastNeedle[cNum].row);
     let lastDir = (lastNeedle[cNum]===undefined?
@@ -742,6 +749,7 @@ function knit(direction, bed, needle, carrier){
     if(direction!==lastDir)
         row++;
     let newLoop = new loop(info, carrier);
+
     if(yarn[cNum]!==undefined && yarn[cNum][row]!==undefined){
         let yarnLoops = (bed==='f' ? yarn[cNum][row].floops : yarn[cNum][row].bloops);
         yarnLoops[needle] = [newLoop];

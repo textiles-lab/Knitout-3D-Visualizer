@@ -27,5 +27,10 @@ knit + b5 6
 knit - f6 6
 knit + b5 6
 
-knit - f4 6
-
+outhook 6
+inhook 8
+knit - f4 8
+knit - f2 8
+knit + b1 8
+knit + b3 8
+knit - f4 8
