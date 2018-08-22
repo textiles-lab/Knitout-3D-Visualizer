@@ -18,35 +18,39 @@ if (process.argv.length != 4) {
 }
 
 //globals
+
+//file setup
 var knitoutFile = process.argv[2];
 var textFile = process.argv[3];
 const fs = require('fs');
 var stream = fs.createWriteStream(textFile);
-var frontActiveRow = [];
-var backActiveRow = [];
-var lastNeedle = [];
-var anyLast;
-//stores current "highest" yarn in the transfer area at the end of each stitch
-var maxHeight = [];
-var horizons = [];
-var pointHeight = {};
-var allCarriers = [];
-var maxCarriers = 16;
 
+//data store stuff
+var frontActiveRow = []; //info on the active stitch(es) on each needle on the front bed
+var backActiveRow = []; //info on the active stitch(es) on each needle on the back bed
+var lastNeedle = []; //array of the last used needle for each carrier
+var anyLast; //the last needle used. Can be of any carrier.
+var maxHeight = [];
+//array of the max "height" for each needle's associated stitch and carrier position
+var allCarriers = []; //all carriers declared by the header of the .k file
+var maxCarriers = 0; //changed during parsing. equal to the length of allCarriers
+
+//parameters (These can *probably* be changed without wrecking everything)
 var boxWidth = 1;
 var boxHeight = 1;
 var boxDepth = 0.1;
 var boxSpacing = boxHeight/2;
-var epsilon = 0.1;
+var epsilon = 0.1; //amount stitches are moved "up" to avoid intersecting
+
 //layer depths
 const FRONT_BED = 1;
 const BACK_BED = -1;
-const CARRIERS = 0;
+const CARRIERS = -0.4;
 const FRONT_SLIDERS = 0.5;
 const BACK_SLIDERS = -0.5;
 const CROSSING = boxWidth/3;
 const PADDING = boxWidth/10;
-const CARRIER_SPACING = (FRONT_SLIDERS-CARRIERS)/16;
+let CARRIER_SPACING = (FRONT_SLIDERS-CARRIERS); //to be dividied by number of total carriers
 
 //different pass types:
 const TYPE_KNIT_TUCK = 'knit-tuck';
@@ -71,44 +75,15 @@ const DIRECTION_LEFT = '-';
 const DIRECTION_RIGHT = '+';
 const DIRECTION_NONE = '';
 
-//map is stitch.leading => stitch number
-//NOTE: this is the opposite of how the 'stitch' op does it (leading, stitch).
-//NOTE: this doesn't do anything with 'YG', also what is YG?
-//NOTE: this should probably be read out of a .999 file of some sort
-const STITCH_NUMBERS = {
-    '10.-10':81,
-    '10.0': 82,
-    '10.10':83,
-    '15.5': 84,
-    '15.10':85,
-    '15.15':86,
-    '20.10':87,
-    '20.15':88,
-    '20.20':89,
-    '25.15':90,
-    '25.20':91,
-    '25.25':92,
-    '30.25':93,
-    '35.25':94,
-    '40.25':95,
-    '45.25':96,
-    '50.25':97,
-    '55.25':98,
-    '60.25':99,
-    '65.25':100
-};
-//these give the expected range of stopping distances:
-const MIN_STOPPING_DISTANCE = 10;
-const MAX_STOPPING_DISTANCE = 20;
 //special op, turns into a MISS if slot is unoccupied, or merges with knit/tuck/etc.
 const OP_SOFT_MISS = {color:16};
 const OP_MISS_FRONT = {color:216 /*bed:'f'*/}; //116 == front miss (with links process), 216 == front miss (independent carrier movement)
 const OP_MISS_BACK  = {color:217 /*bed:'b'*/}; //117 == back miss (with links process), 217 == back miss (independent carrier movement)
 //NOTE: this code sometimes uses 216/217 without independent carrier movement, at that seems to be okay(?!?)
-const OP_TUCK_FRONT = {color:11, isFront:true /*bed:'f'*/};
-const OP_TUCK_BACK	= {color:12, isBack:true /*bed:'b'*/};
-const OP_KNIT_FRONT = {color:51, isFront:true /*bed:'f'*/};
-const OP_KNIT_BACK	= {color:52, isBack:true /*bed:'b'*/};
+const OP_TUCK_FRONT = {color:11, isFront:true };
+const OP_TUCK_BACK	= {color:12, isBack:true };
+const OP_KNIT_FRONT = {color:51, isFront:true};
+const OP_KNIT_BACK	= {color:52, isBack:true};
 //combo ops:
 const OP_XFER_TO_BACK = {color:20};
 const OP_XFER_TO_FRONT = {color:30};
@@ -181,207 +156,29 @@ function Carrier(name) {
     this.in = null; //the "in" operation that added this to the active set. (format: {op:"in", cs:["", "", ...]})
 }
 
-//Pass stores info on a single machine pass
-function Pass(info){
-    //type: one of the TYPE_* constants (REQUIRED)
-    //racking: number giving racking (REQUIRED)
-    //stitch: number giving stitch (REQUIRED)
-    //slots: index->operation
-    //direction: one of the DIRECTION_* constants
-    //carriers: array of carriers, possibly of zero length
-    //hook: one of the HOOK_* constants or undefined
-    //gripper: one of the GRIPPER_* constants or undefined
-    ['type', 'slots', 'direction', 'carriers', 'hook', 'gripper', 'racking',
-        'stitch', 'speed', 'presserMode'].forEach(function(name){
-            if (name in info) this[name] = info[name];
-        }, this);
-    if(!('carriers' in this))this.carriers = [];
-    //check specs
-    console.assert('type' in this, "Can't specify a pass without a type.");
-    console.assert('racking' in this, "Can't specify a pass without a racking.");
-    console.assert('stitch' in this, "Can't specify a pass without a stitch value.");
-
-    if(this.type === TYPE_KNIT_TUCK){
-        if('gripper' in this){
-            console.assert(this.carriers.length!==0,
-                "Using GRIPPER_* with no carriers doesn't make sense.");
-            if(this.gripper === GRIPPER_IN)
-                console.assert(!('hook' in this) || this.hook===HOOK_IN,
-                    "Must use GRIPPER_IN with HOOK_IN.");
-            else if(this.gripper === GRIPPER_OUT)
-                console.assert(!('hook' in this) || this.hook===HOOK_OUT,
-                    "Must use GRIPPER_OUT with HOOK_OUT.");
-            else
-                console.assert(false,
-                    "Pass gripper must be one of the GRIPPER_* constants.");
-        }
-        if('hook' in this){
-            if(this.hook === HOOK_IN){
-                console.assert(this.carriers.length!==0,
-                    "Using HOOK_IN with no carriers doesn't make sense.");
-            }else if(this.hook === HOOK_RELEASE){
-                //HOOK_RELEASE can work with any carriers
-            }else if(this.hook === HOOK_OUT){
-                console.assert(this.carriers.length!==0,
-                    "Using HOOK_OUT with no carriers doesn't make sense.");
-            }else{
-                console.assert(false,
-                    "Pass hook must be one of the HOOK_* constants.");
-            }
-        }
-    }else if(this.type === TYPE_SPLIT) {
-        console.assert(!('gripper' in this),
-            "Must use gripper enly on KNIT_TUCK pass.");
-        console.assert(!('hook' in this),
-            "Must use hook only on KNIT_TUCK pass.");
-        console.assert(this.carrers.length>0,
-            "Split passes should have yarn.");
-    }else if(this.type === TYPE_XFER || this.type === TYPE_XFER_TOSLIDERS
-        || this.type === TYPE_XFER_FROM_SLIDERS){
-        console.assert(!('gripper' in this),
-            "Must use gripper only on KNIT_TUCK pass.");
-        console.assert(!('hook' in this),
-            "Must use gripper only on KNIT_TUCK pass.");
-        console.assert(this.carriers.length === 0,
-            "Transfer passes cannot have carriers specified.");
-    }else{
-        console.assert(false, "Pass type must be on of the TYPE_* constants.");
-    }
-}
-Pass.prototype.hasFront = function(){
-    console.assert(this.type === TYPE_KNIT_TUCK,
-        "It only makes sense for knit-tuck passes to have front stitches.");
-    for(let s in this.slots){
-        if('isFront' in this.slots[s]) return true;
-    }
-    return false;
-};
-Pass.prototype.hasBack = function(){
-    console.assert(this.type === TYPE_KNIT_TUCK,
-        "It only makes sense for knit-tuck passes to have back stitches.");
-    for(let s in this.slots){
-        if('isBack' in this.slots[s]) return true;
-    }
-    return false;
-};
-Pass.prototype.append = function(pass){
-    if(!['type', 'racking', 'stitch', 'direction', 'carriers'].every(function(name){
-        return JSON.stringify(this[name])===JSON.stringify(pass[name]);
-    }, this)){
-        return false;
-    }
-
-    if(!('hook' in this) && !('hook' in pass)){
-        //hook in neither is fine
-    }else if(this.hook === HOOK_IN && !('hook' in pass)){
-        //in at start of current pass is fine
-    }else if(!('hook' in this) &&
-        (pass.hook === HOOK_OUT||pass.hook===HOOK_RELEASE)){
-        //out or release at the end of the next pass is fine
-    }else{
-        return false;
-    }
-
-    if(!('gripper' in this) && !('gripper' in pass)){
-        //gripper in neither is fine
-    }else if(this.gripper === GRIPPER_IN && !('gripper' in pass)){
-        //in at the start of the current pass is fien
-    }else if(!('gripper' in this) && pass.gripper === GRIPPER_OUT){
-        //out at the end of the next pass is fine
-    }else{
-        return false;
-    }
-    let quarterPitch = (this.racking-Math.floor(this.racking)) != 0.0;
-    if(this.direction === DIRECTION_RIGHT){
-        //new operation needs to be on the right of other ops
-        let max = -Infinity;
-        for(let s in this.slots)
-            max = Math.max(max, parseInt(s));
-        for(let s in pass.slots){
-            s = parseInt(s);
-            if (s<max)
-                return false;
-            else if(s===max){
-                if(merge_ops(this.slots[s], pass.slots[s], quarterPitch)
-                    === null){
-                    return false;
-                }
-            }
-        }
-    }else if(this.direction === DIRECTION_LEFT){
-        let min = Infinity;
-        for(let s in this.slots){
-            min = Math.min(min, parseInt(s));
-        }
-        for(let s in pass.slots){
-            s = parseInt(s);
-            if(s>min){
-                return false;
-            }else if(s===min){
-                if(merge_ops(pass.slots[s], this.slots[s], quarterPitch)
-                    === null){
-                    return false;
-                }
-            }
-        }
-    }else{
-        console.assert(this.direction === DIRECTION_NONE,
-            "'"+this.direction+"' must be a DIRECTION_* constant.");
-        for(let s in pass.slots){
-            if(s in this.slots){
-                if(merge_ops(this.slots[s], pass.slots[s], quarterPitch)
-                    ===null
-                    &&merge_ops(pass.slot[s], this.slot[s], quarterPitch)
-                    ===null){
-                    return false;
-                }
-            }
-        }
-    }
-    //merge hook and gripper properties
-    if(!('hook' in this) && ('hook' in pass))
-        this.hook = pass.hook;
-    else
-        console.assert(!('hook' in pass), "we checked this");
-    if(!('gripper' in this) && ('gripper' in pass))
-        this.gripper = pass.gripper;
-    else
-        console.assert(!('gripper' in pass), "we checked this");
-
-    //merge slots
-    for(let s in pass.slots){
-        if(s in this.slots){
-            if(this.direction === DIRECTION_RIGHT){
-                this.slots[s]=
-                    merge_ops(this.slots[s], pass.slots[s], quarterPitch);
-            }else if(this.direction === DIRECTION_LEFT){
-                this.slots[s] =
-                    merge_ops(pass.slots[s], this.slots[s], quarterPitch);
-            }else{
-                console.assert(this.direction === DIRECTION_NONE,
-                    "Direction must a DIRECTION_* constants");
-                let op = merge_ops(this.slots[s],pass.slots[s],quarterPitch);
-                if(op===null)
-                    op = merge_ops(pass.slots[s],pass.slots[s],quarterPitch);
-                this.slots[s] = op;
-            }
-        }else{
-            this.slots[s] = pass.slots[s];
-        }
-    }
-    return true;
-};
-
-//stores points for the entire knitted yarn thing
+//yarn is a 2D array that stores points for the entire knitted yarn thing
+//yarn is organized by the number value assigned to each carrier.
+//withing each yarn[carrier number] is a another array where the indexes represent
+//"rows".
+//
+//the idea of "rows" in this code is primarily for organization purposes. A new
+//row is formed when:
+//  a) the direction of knitting changes
+//  b) a knit is made somewhere that already has a stitch
 let yarn = [];
 
-//stores things for each new pass with yarn
+//each yarn[carrier number][row number] holds a "yarnPass" object.
+//the field "bloops" is an array of loop objects on the back bed
+//the field "floops" is an array of loop objects on the front bed.
+//  (each loop is stored in the array index = to its needle number)
+//the field direction is the direction that the loops were all knit in ('+' or '-')
 function yarnPass(floops, bloops, direction){
     this.bloops = bloops;
     this.floops = floops;
     this.direction = direction;
 }
 
+//TODO comment everything below this
 //stored in array of active loops. Its a row and a needle number used to access
 //the object in the "yarn" array
 function loopSpec(row, carrier){
@@ -537,7 +334,7 @@ function updateLast(lastNeedle, direction, needle, carrier, height){
     let carrierHeight = height;
     let cNum = getCarrierNum(carrier);
     let padding = (direction==='-' ? -PADDING : PADDING);
-    let carrierDepth = CARRIERS+CARRIER_SPACING*carrier;
+    let carrierDepth = CARRIERS+CARRIER_SPACING*cNum;
     let start = [needle*(boxWidth+boxSpacing), height, carrierDepth];
     if(direction === '+') start[0] -= boxWidth;
 
@@ -598,7 +395,7 @@ function makeStitch(direction, bed, needle, carrier, height){
     let carrierHeight = height;
     let spaceNeedle = (direction==='-' ? needle-1 : needle);
 
-    let carrierDepth = CARRIERS+CARRIER_SPACING*carrier;
+    let carrierDepth = CARRIERS+CARRIER_SPACING*cNum;
     let start = [needle*(boxWidth+boxSpacing), height, carrierDepth];
 
     if(direction === '-') dx*= -1;
@@ -949,7 +746,7 @@ function main(){
         cs.forEach(function(c){
             console.assert(c in carriers, "carrier not in carrier set");
             carriers[c].last =
-                {needle:n, direction:d, minDistance:MIN_STOPPING_DISTANCE};
+                {needle:n, direction:d};
         });
     }
 
@@ -969,6 +766,8 @@ function main(){
         if(m){
             let c = line.substring(12);
             allCarriers = c.split(' ');
+            maxCarriers = allCarriers.length;
+            CARRIER_SPACING /= maxCarriers;
         }
     }
 
