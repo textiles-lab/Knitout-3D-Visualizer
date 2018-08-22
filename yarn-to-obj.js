@@ -3,10 +3,11 @@
 "use strict";
 
 /*yarn-to-obj
- * Takes a file (.txt maybe) and turns it into an .obj file. Input file should
+ * Takes a .txt file and turns it into an .obj file. Input file should
  * be a series of 3D coordinates with each component delineated by a space and
  * each new coordinate separated by a new line. The .obj should connect those
- * points into a long winding line representing a yarn path.
+ * points into chunky poly lines representing yarn paths. Different carriers are
+ * represented by different (random) colors.
  */
 
 
@@ -20,6 +21,9 @@ let inputFile = process.argv[2];
 let objFile = process.argv[3];
 const fs = require('fs');
 //------------------------------------
+
+//points from the input file are strings, so must be converted to number
+//coordinates
 function numberize(strings){
     for(let i = 0; i<strings.length; i++){
         strings[i] = parseFloat(strings[i].trim());
@@ -30,12 +34,10 @@ function numberize(strings){
 function main(){
     //creating objFile
     let buffer = '';
-    let carriers = [];
-    let carrierChange = [];
-    let carrierChangeTarget = [];
+    let carrierChange = []; //stores the command to change color
 
     let points = fs.readFileSync(inputFile, 'utf8').trim().split('\n');
-    let yarnPoints = 0;
+    let yarnPoints = 0; //total number of coordinates
 
     //sets up different colors for carriers
     for(let i = 1; i<=16; i++){
@@ -48,14 +50,15 @@ function main(){
         if(points[i][0] == parseInt(points[i][0])){
             buffer+= 'v '+points[i]+'\n';
             yarnPoints++;
-        }else if('c' === points[i][0]){
-            let sliced = points[i].slice(2);
-            carriers.push(sliced);
         }else if('u' === points[i][0]){
+            //this is when the txt file includes the phrase "usemtl"
+            //marks a different yarn/carrier
             carrierChange[yarnPoints] = points[i];
         }
     }
     //adds each coordinate but slightly offset
+    //this is done because the online obj viewer I used to test doesn't support
+    //lines, so I had to make all the poly lines into faces.
     let offset = 0.01;
     for(let i = points.length-1; i>=0; i--){
         if(points[i][0] == parseInt(points[i][0])){
@@ -67,12 +70,7 @@ function main(){
         }
     }
 
-    //add carrier coordinates
-    for(let i = 0; i<carriers.length; i++){
-        buffer+= 'v '+carriers[i]+'\n';
-    }
-
-    //connect the dots
+    //creates the faces to make up the polylines
     for(let i = 1; i<yarnPoints; i++){
         if(carrierChange[i-1]){
             //different carrier so change color, and separate line
@@ -82,11 +80,8 @@ function main(){
                 +(2*yarnPoints-i)+' '+(2*yarnPoints-i+1)+'\n';
         }
     }
-    //draw triangles
-    for(let i = 0; i<carriers.length; i+=3){
-        let index = i+2*yarnPoints+1;
-        buffer+='f '+index+' '+(index+1)+' '+(index+2)+'\n';
-    }
+
+    //copies all the stuff into the output file
     fs.writeFileSync(objFile, buffer);
 }
 
