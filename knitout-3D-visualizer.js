@@ -17,6 +17,9 @@ if (process.argv.length != 4) {
     return;
 }
 
+//TODO ah currently height checking doesnt check the carriers crossed at carrier
+//depth whoops
+
 //globals
 
 //file setup
@@ -178,49 +181,47 @@ function yarnPass(floops, bloops, direction){
     this.direction = direction;
 }
 
-//TODO comment everything below this
-//stored in array of active loops. Its a row and a needle number used to access
-//the object in the "yarn" array
+//used in frontActiveRow and backActiveRow.
+//Its just an object that stores the "row" and carrier of the currently active
+//loop on a certain needle.
 function loopSpec(row, carrier){
     this.row = row;
     this.carrier = carrier;
 }
 
-
-//stores things for each needle with yarn on it
+//stored in the array that is accessed by yarn[carrier #][row #].floops
+//or yarn[carrier #][row #].bloops
 function loop(pts, carrier){
-    //ctrlPts: the coordinates of each point on the loop
-    this.ctrlPts = pts;
-    this.carrier = carrier;
+    this.ctrlPts = pts; //array of coordinates for the stitch
+    this.carrier = carrier; //carrier the stitch was knit with
 }
 
-
-
+//just a helper to put points in the proper format for the output file
 function format(x, y, z){
     return x+" "+y+" "+z+"\n";
 }
 
-function errorHandler(err, data){
-    if(err) return console.error(err);
-}
-
 //converts a carrier string to a set number
 function getCarrierNum(cs){
-    for(let i = 0; i<allCarriers.length;i++){
+    for(let i = 0; i<maxCarriers;i++){
         if(allCarriers[i] == cs)
             return i;
     }
     console.assert(false, "Tried to access a non-active carrier.");
 }
 
-function pointName(plane, direction, needle, carrier){
-    //horizon's shall be stored only for 2 points of each needle now:
-    //the main stitch area, and the carrier associated with that needle
+//This function is used to obtain a index for acessing "horizons"
+//(the max height of part of the yarn)
+//horizons shall be stored only for 2 points of each needle now:
+//the main stitch area, and the carrier area associated with that needle
 
-    //planes should be 'f' or 'b' or 'c'
-    //needle should be int
-    //direction should be '+' or '-' if 'f' or 'b' for plane
-    //carrier should be some string if 'f' or 'b' for plane
+//planes should be 'f' or 'b' or 'c'
+//needle should be a number
+//direction should be '+' or '-' if 'c' for plane
+//  direction does NOT refer to the direction of knitting, but the side of
+//  the stitch the desired carrier position is on. '-' means left and '+' right
+//carrier should be some string
+function pointName(plane, direction, needle, carrier){
     console.assert(plane==='f'||plane==='b'||plane==='c',
         "'plane' field must be 'f', 'b', or 'c'.");
     console.assert(typeof(needle) == 'number', "'needle' must be a number.");
@@ -230,53 +231,51 @@ function pointName(plane, direction, needle, carrier){
     console.assert(typeof(carrier) == 'string',
         "'carrier' field must be a string.");
 
-
     let index = 0;
-    let c = allCarriers.length;
+    let c = maxCarriers;
     //each needle occupies c+2 indices.
     //front and back versions of each needle
-    //and then c indices, one for each carrier for the carrier depth.
+    //and then c indices, one for each carrier at the carrier depth.
 
     let n = needle;
     if(plane==='c' && direction==='-')
         n -=1 ;
     index+=n*(c+2);
-
     if(plane==='b')
         index+1;
     else if(plane==='c')
         index+=+2;
 
-    index+=allCarriers.indexOf(carrier);
+    index+=getCarrierNum(carrier);
 
     return index;
 }
 
 //gets the necessary height to prevent intersections at the carrier level
-function getMaxHeight(minHeight, min, max, carrier){
+function getMaxHeight(minHeight, startNeedle, endNeedle, carrier){
     let raised = false;
-    let result = minHeight;
-    for(let i = min; i<max; i++){
-        let cIndex = pointName('c', '+', i, carrier);
-        if(maxHeight[cIndex]>=result){
+    let max = minHeight;
+    for(let i = startNeedle; i<endNeedle; i++){
+        let index = pointName('c', '+', i, carrier);
+        if(maxHeight[index]>=max){
             raised = true;
-            result = maxHeight[cIndex];
+            max = maxHeight[index];
         }
     }
-    if(raised) result +=epsilon;
+    if(raised) max +=epsilon;
 
-    return result;
+    return max;
 }
 
 //updates max height for a range
-function setMaxHeight(newHeight, min, max, carrier){
-    for(let i = min; i<max; i++){
-        let cIndex = pointName('c', '+', i, carrier);
-        maxHeight[cIndex] = newHeight;
+function setMaxHeight(newHeight, startNeedle, endNeedle, carrier){
+    for(let i = startNeedle; i<endNeedle; i++){
+        let index = pointName('c', '+', i, carrier);
+        maxHeight[index] = newHeight;
     }
 }
 
-//gets yarn "height" of neighbors
+//gets yarn "height" of neighboring loops
 function neighborHeight(bed, needle, carrier){
     let max = 0;
     let cNum = getCarrierNum(carrier);
@@ -288,7 +287,7 @@ function neighborHeight(bed, needle, carrier){
         return max;
     while(left>=0||right<activeRow.length){
         if(left>=0){
-            if(activeRow[left]){
+            if(activeRow[left]!==undefined){
                 let row = activeRow[left].row;
                 if(yarn[cNum][row]!==undefined){
                     if((bed==='f' && yarn[cNum][row].floops[left])
@@ -301,7 +300,7 @@ function neighborHeight(bed, needle, carrier){
             left--;
         }
         if(right<activeRow.length){
-            if(activeRow[right]){
+            if(activeRow[right]!==undefined){
                 let row = activeRow[right].row;
                 if(yarn[cNum][row]!==undefined){
                     if((bed==='f'&& yarn[cNum][row].floops[right])
@@ -317,6 +316,10 @@ function neighborHeight(bed, needle, carrier){
     return max;
 }
 
+//this gets the minimum height needed for starting a stitch at a certain needle
+//this is obtained by subtracting from the top of the stitch because in some
+//edge cases, the head of the stitch is raised to avoide intersections, and this
+//way ensures that obtaining the height for knitting the next stitch is correct
 function minHeight(needleSpec, bed, needle){
     let max = -Infinity;
     let carrier = needleSpec.carrier;
@@ -331,35 +334,38 @@ function minHeight(needleSpec, bed, needle){
 
 //updates last stitch to avoid intersections at the carrier level
 function updateLast(lastNeedle, direction, needle, carrier, height){
-    let carrierHeight = height;
     let cNum = getCarrierNum(carrier);
     let padding = (direction==='-' ? -PADDING : PADDING);
+    //padding is the little space between the start of the "box" for each
+    //stitch and the position that it goes back to the carrier at. It's different
+    //depending on what carrier is knitting the stitch
     let carrierDepth = CARRIERS+CARRIER_SPACING*cNum;
-    let start = [needle*(boxWidth+boxSpacing), height, carrierDepth];
-    if(direction === '+') start[0] -= boxWidth;
 
+    //end is the starting point of the current stitch, so the last stitch,
+    //which is being updated in this function should end there
+    let end = [needle*(boxWidth+boxSpacing), height, carrierDepth];
+    if(direction === '+') end[0] -= boxWidth;
+
+    let carrierHeight = height;
     if(lastNeedle[cNum]!==undefined){
-        //get max height since last needle
-
+        //get the stitch that needs to be updated
         let toUpdate = (lastNeedle[cNum].bed==='f'?
             yarn[cNum][lastNeedle[cNum].row].floops[lastNeedle[cNum].needle]
             : yarn[cNum][lastNeedle[cNum].row].bloops[lastNeedle[cNum].needle]);
         toUpdate = toUpdate[toUpdate.length-1].ctrlPts;
         let lastPt = toUpdate.length-1;
 
-        //maxheight index of the current stitch
+        //determine which sides of the current and previous needle are part of the
+        //region that needs to be checked
         let n1 = needle;
-        let LorR1 = (needle>lastNeedle[cNum].needle ? '-' : '+');
+        let n2 = lastNeedle[cNum].needle;
+        let LorR1 = (n1>n2 ? '-' : '+');
         if(lastNeedle[cNum].direction !== direction)
             LorR1 = (LorR1==='-' ? '+' : '-');
-
-        //maxheight index of previous stitch
-        let LorR2 = (lastNeedle[cNum].needle<needle ? '+' : '-');
-        let n2 = lastNeedle[cNum].needle;
+        let LorR2 = (n2<n1 ? '+' : '-');
 
         let upperBound = Math.max(n1, n2);
         let lowerBound = Math.min(n1, n2);
-
         carrierHeight = toUpdate[lastPt][1];
         carrierHeight = getMaxHeight(carrierHeight, lowerBound,
             upperBound, carrier);
@@ -367,7 +373,8 @@ function updateLast(lastNeedle, direction, needle, carrier, height){
         //update last stitch
         let subPadPrev = padding/maxCarriers * cNum;
 
-        toUpdate[lastPt][0] = start[0]+subPadPrev;
+        toUpdate[lastPt][0] = end[0]+subPadPrev;
+
         toUpdate[lastPt][1] = carrierHeight;
 
         toUpdate[lastPt-1][1] = carrierHeight;
@@ -389,11 +396,7 @@ function makeStitch(direction, bed, needle, carrier, height){
     let dy =  boxHeight/3;
     let dz = boxDepth/2;
     let padding = (direction==='-' ? -PADDING : PADDING);
-
     let activeRow = (bed==='f' ? frontActiveRow : backActiveRow);
-    let stackHeight = height;
-    let carrierHeight = height;
-    let spaceNeedle = (direction==='-' ? needle-1 : needle);
 
     let carrierDepth = CARRIERS+CARRIER_SPACING*cNum;
     let start = [needle*(boxWidth+boxSpacing), height, carrierDepth];
@@ -405,19 +408,24 @@ function makeStitch(direction, bed, needle, carrier, height){
         dz*=-1;
     }
 
-    carrierHeight = updateLast(lastNeedle, direction, needle, carrier, height);
+    //updates last stitch to prevent intersections
+    //carrierHeight is the starting height for this stitch as well.
+    let carrierHeight = updateLast(lastNeedle, direction, needle, carrier, height);
 
     //find the current needed height for the end of the current stitch
     let x = start[0];
     let y = start[1];
     let z = start[2];
 
+    //again, this represents the carrier specific location that a stitch goes
+    //between the bed to carrier depth
     let subPad = padding/maxCarriers * getCarrierNum(carrier);
-    let bedx1 = x;
-    bedx1+=padding;
+    let bedx1 = x+padding; //this is the start of the stitch after the padding
     let bedx2 = x + padding + 5*dx +padding - subPad;
+    //this is the bed to carrier location at the end of the stitch
     let nextStart = x +
         (direction==='-' ? (-boxSpacing-boxWidth) : (boxSpacing+boxWidth));
+    //this is the start of the next stitch aka the end of the current "box"
 
     x += subPad;
     z = (bed==='b' ? BACK_BED : FRONT_BED);
@@ -470,7 +478,7 @@ function makeStitch(direction, bed, needle, carrier, height){
     info.push([x, y, z]);
     info.push([x, y, z]);
 
-    y = stackHeight;
+    y = height;
     z = carrierDepth;
     info.push([x, y, z]);
 
@@ -481,20 +489,14 @@ function makeStitch(direction, bed, needle, carrier, height){
 }
 
 
-/*basic knitout functions
- * each should take:
- *  -start: array of components of the start position
- *  -direction: direction of the current pass,
- *  -bed: the needle bed
- */
-
+//makes a tuck. TODO multiple tucks on same needle
 function tuck(direction, bed, needle, carrier){
     let cNum = getCarrierNum(carrier);
     let activeRow = (bed==='f' ? frontActiveRow : backActiveRow);
+
     let row = (lastNeedle[cNum]===undefined ? 0 : lastNeedle[cNum].row);
     if(lastNeedle[cNum]!==undefined && lastNeedle[cNum].direction!==direction)
         row++;
-
     let height = (activeRow[needle] !== undefined ?
         minHeight(activeRow[needle], bed, needle)
         : neighborHeight(bed, needle, carrier));
@@ -535,6 +537,7 @@ function tuck(direction, bed, needle, carrier){
     anyLast = lastNeedle[cNum];
 }
 
+//makes a knit
 function knit(direction, bed, needle, carrier){
     let cNum = getCarrierNum(carrier);
     let activeRow = (bed==='f' ? frontActiveRow : backActiveRow);
@@ -545,6 +548,12 @@ function knit(direction, bed, needle, carrier){
 
     let info = makeStitch(direction, bed, needle, carrier, bottomHeight);
     if(topHeight>bottomHeight){
+        //if the height of neighbor yarns is taller than the current stitch,
+        //it causes an intersection at the place where the stitch goes up in order
+        //to go back to the carrier depth.
+        //
+        //this attempts to fix it by raising the stretching the top loop of a
+        //stitch up. It seems to work for simple cases. TODO Needs more testing.
         let topInfo = makeStitch(direction, bed, needle, carrier, topHeight);
         for(let i = 4; i<=11; i++){
             info[i] = topInfo[i];
@@ -559,7 +568,8 @@ function knit(direction, bed, needle, carrier){
     let newLoop = new loop(info, carrier);
 
     if(yarn[cNum]!==undefined && yarn[cNum][row]!==undefined){
-        let yarnLoops = (bed==='f' ? yarn[cNum][row].floops : yarn[cNum][row].bloops);
+        let yarnLoops = (bed==='f' ?
+            yarn[cNum][row].floops : yarn[cNum][row].bloops);
         yarnLoops[needle] = [newLoop];
     }else{
         let newFloop = [];
@@ -582,6 +592,13 @@ function knit(direction, bed, needle, carrier){
     anyLast = lastNeedle[cNum];
 }
 
+//transfer one loop to a different place
+//TODO xfer should keep the places the needle has been to to ensure proper
+//representation of yarn crossing and stuff.
+//When doing: make sure to check for intersections and also update code that
+//assumes each yarn loop has a set number of points (just in knit() and
+//makeStitch() I think).
+        //TODO comment everything below this
 function xfer(fromSide, fromNeedle, toSide, toNeedle){
     let fromActiveRow = (fromSide==='f' ? frontActiveRow : backActiveRow);
     let toActiveRow = (toSide==='f' ? frontActiveRow : backActiveRow);
@@ -657,7 +674,7 @@ function xfer(fromSide, fromNeedle, toSide, toNeedle){
 
 function makeTxt(){
     let mostRecentC;
-    for(let cNum = 0; cNum<allCarriers.length;cNum++){
+    for(let cNum = 0; cNum<maxCarriers;cNum++){
         if(yarn[cNum]!==undefined){
             stream.write("usemtl mtl"+cNum+"\n");
             for(let row = 0; row<yarn[cNum].length; row++){
