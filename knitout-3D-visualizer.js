@@ -332,8 +332,36 @@ function minHeight(needleSpec, bed, needle){
     return max - (boxHeight/6) - boxSpacing;
 }
 
+//Note that when going from back bed to the appropriate carrier depth, the yarn
+//passes over any carrier slots < the desired.
+//When going from front bed to the appropriate carrier depth, the yarn passes
+//carrier slots > the number of the desired carrier.
+function carrierCheck(height, bed, needle, cNum){
+    let raised = false;
+    let min = height;
+    if(bed === 'f'){
+        for(let i = cNum+1; i<maxCarriers; i++){
+            let index = pointName('c', '+', needle, allCarriers[i]);
+            if(maxHeight[index]>=min){
+                raised = true;
+                min = maxHeight[index];
+            }
+        }
+    }else{
+        for(let i = 0; i<cNum; i++){
+            let index = pointName('c', '+', needle, allCarriers[i]);
+            if(maxHeight[index]>=min){
+                raised = true;
+                min = maxHeight[index];
+            }
+        }
+    }
+    if(raised) min+=epsilon;
+    return min;
+}
+
 //updates last stitch to avoid intersections at the carrier level
-function updateLast(lastNeedle, direction, needle, carrier, height){
+function updateLast(lastNeedle, direction, bed, needle, carrier, height){
     let cNum = getCarrierNum(carrier);
     let padding = (direction==='-' ? -PADDING : PADDING);
     //padding is the little space between the start of the "box" for each
@@ -369,6 +397,10 @@ function updateLast(lastNeedle, direction, needle, carrier, height){
         carrierHeight = toUpdate[lastPt][1];
         carrierHeight = getMaxHeight(carrierHeight, lowerBound,
             upperBound, carrier);
+
+        //checking for intersection with yarn from other carriers
+        carrierHeight = carrierCheck(carrierHeight, bed, n1, cNum);
+        carrierHeight = carrierCheck(carrierHeight, lastNeedle[cNum].bed, n2, cNum);
 
         //update last stitch
         let subPadPrev = padding/maxCarriers * cNum;
@@ -410,7 +442,7 @@ function makeStitch(direction, bed, needle, carrier, height){
 
     //updates last stitch to prevent intersections
     //carrierHeight is the starting height for this stitch as well.
-    let carrierHeight = updateLast(lastNeedle, direction, needle, carrier, height);
+    let carrierHeight = updateLast(lastNeedle, direction, bed, needle, carrier, height);
 
     //find the current needed height for the end of the current stitch
     let x = start[0];
