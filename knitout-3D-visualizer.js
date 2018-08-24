@@ -504,7 +504,8 @@ function tuck(direction, bed, needle, carrier){
     let info = makeStitch(direction, bed, needle, carrier, height);
     let newLoop = new loop(info, carrier);
     if(yarn[cNum]!==undefined && yarn[cNum][row]!==undefined){
-        let yarnLoops = (bed==='f' ? yarn[cNum][row].floops : yarn[cNum][row].bloops);
+        let yarnLoops = (bed==='f' ?
+                        yarn[cNum][row].floops : yarn[cNum][row].bloops);
         if(yarnLoops[needle]){
             yarnLoops[needle].push(newLoop);
         }else{
@@ -598,7 +599,6 @@ function knit(direction, bed, needle, carrier){
 //When doing: make sure to check for intersections and also update code that
 //assumes each yarn loop has a set number of points (just in knit() and
 //makeStitch() I think).
-        //TODO comment everything below this
 function xfer(fromSide, fromNeedle, toSide, toNeedle){
     let fromActiveRow = (fromSide==='f' ? frontActiveRow : backActiveRow);
     let toActiveRow = (toSide==='f' ? frontActiveRow : backActiveRow);
@@ -617,7 +617,8 @@ function xfer(fromSide, fromNeedle, toSide, toNeedle){
     let height = (toActiveRow[toNeedle] ?
         minHeight(toActiveRow[toNeedle], toSide, toNeedle)
         : minHeight(fromActiveRow[fromNeedle], fromSide, fromNeedle));
-    let updatedInfo = makeStitch(direction, toSide, toNeedle,info[0].carrier, height);
+    let updatedInfo = makeStitch(direction, toSide, toNeedle,
+        info[0].carrier, height);
 
     for(let i = 5; i<=10; i++){
         for(let j = 0; j<info.length; j++){
@@ -627,18 +628,18 @@ function xfer(fromSide, fromNeedle, toSide, toNeedle){
             info[j].ctrlPts[i] = [x, y, z];
         }
     }
-    let fromRow = specs.row;
-    let toRow = fromRow;//+1;
+    let row = specs.row;
     if(toActiveRow[toNeedle]===undefined){
-        toActiveRow[toNeedle] = new loopSpec(toRow, specs.carrier);
+        toActiveRow[toNeedle] = new loopSpec(row, specs.carrier);
     }
 
-    let destRow = yarn[cNum][toRow];
+    let destRow = yarn[cNum][row];
     if(yarn[cNum][toRow] === undefined){
         let newFloop = [];
         let newBloop = [];
-        yarn[cNum][toRow] = new yarnPass(newFloop, newBloop, yarn[cNum][fromRow].direction);
-        destRow = yarn[cNum][toRow];
+        yarn[cNum][row] = new yarnPass(newFloop, newBloop,
+                            yarn[cNum][row].direction);
+        destRow = yarn[cNum][row];
     }
 
     let destination = (toSide==='f' ? destRow.floops[toNeedle]
@@ -659,11 +660,9 @@ function xfer(fromSide, fromNeedle, toSide, toNeedle){
         }
     }
     if(lastNeedle[cNum].needle === fromNeedle
-        && lastNeedle[cNum].bed === fromSide
-        && lastNeedle[cNum].row === fromRow){
+        && lastNeedle[cNum].bed === fromSide){
         lastNeedle[cNum].needle = toNeedle;
         lastNeedle[cNum].bed = toSide;
-        lastNeedle[cNum].row = toRow;
     }
 
     info = undefined;
@@ -672,6 +671,8 @@ function xfer(fromSide, fromNeedle, toSide, toNeedle){
     else yarn[cNum][fromRow].bloops[fromNeedle] = undefined;
 }
 
+//transfer all the points stored in "yarn" into the output file
+//ft. a incredibly gross number of nested things and braces
 function makeTxt(){
     let mostRecentC;
     for(let cNum = 0; cNum<maxCarriers;cNum++){
@@ -681,7 +682,8 @@ function makeTxt(){
                 if(yarn[cNum][row]!==undefined){
                     let direction = yarn[cNum][row].direction;
                     let yarnRow = yarn[cNum][row];
-                    let maxNeedle = Math.max(yarnRow.floops.length, yarnRow.bloops.length);
+                    let maxNeedle = Math.max(yarnRow.floops.length,
+                                    yarnRow.bloops.length);
                     for(let col = 0; col<maxNeedle; col++){
                         let needle = col;
                         if(direction === '-') needle = maxNeedle-col-1;
